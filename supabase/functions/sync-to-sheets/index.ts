@@ -90,12 +90,17 @@ async function ensureSheet(
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   const data = await res.json();
+  if (!res.ok) {
+    console.error("ensureSheet - get spreadsheet failed:", JSON.stringify(data));
+    throw new Error(`Failed to get spreadsheet: ${JSON.stringify(data)}`);
+  }
+  console.log("Existing sheets:", data.sheets?.map((s: any) => s.properties?.title));
   const exists = data.sheets?.some(
     (s: any) => s.properties?.title === sheetTitle
   );
 
   if (!exists) {
-    await fetch(
+    const addRes = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
       {
         method: "POST",
@@ -108,6 +113,12 @@ async function ensureSheet(
         }),
       }
     );
+    const addData = await addRes.json();
+    if (!addRes.ok) {
+      console.error("ensureSheet - add sheet failed:", JSON.stringify(addData));
+      throw new Error(`Failed to add sheet: ${JSON.stringify(addData)}`);
+    }
+    console.log("Created sheet:", sheetTitle);
   }
 }
 
@@ -118,7 +129,7 @@ async function writeToSheet(
   values: string[][]
 ) {
   const range = `${sheetTitle}!A1`;
-  await fetch(
+  const writeRes = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
     {
       method: "PUT",
@@ -129,6 +140,12 @@ async function writeToSheet(
       body: JSON.stringify({ values }),
     }
   );
+  const writeData = await writeRes.json();
+  if (!writeRes.ok) {
+    console.error("writeToSheet failed:", JSON.stringify(writeData));
+    throw new Error(`Failed to write to sheet ${sheetTitle}: ${JSON.stringify(writeData)}`);
+  }
+  console.log(`Wrote ${values.length} rows to ${sheetTitle}:`, JSON.stringify(writeData));
 }
 
 Deno.serve(async (req) => {

@@ -153,87 +153,201 @@ export function reconcile(gstrRows: any[], ourRows: any[], extraCols: any[] = []
     pairedSection.forEach(r => output.push(r));
   }
 
+  // Store possibleMatchPairs on the output array for use by diagnosis/downloads
+  (output as any)._possibleMatchPairs = possibleMatchPairs;
+
   return output;
 }
 
 // ═══════════════════════════════════════════════════════════
-// MISMATCH DIAGNOSIS
+// MISMATCH DIAGNOSIS — exact port from original buildDiagnosis
 // ═══════════════════════════════════════════════════════════
 
-export function diagnoseMismatches(recoRows: any[]) {
-  const notInOurData: any[] = [];
-  const notInGSTR2B: any[] = [];
-  const figNotMatched: any[] = [];
+export function diagnoseMismatches(gstrRows: any[], ourRows: any[], recoOutput: any[]) {
+  // Build lookup maps
+  const tallyByInv: Record<string, any[]> = {};
+  ourRows.forEach((r: any) => {
+    const inv = cleanString(r.invoiceNum === '(blank)' ? '' : (r.invoiceNum || ''));
+    if (!tallyByInv[inv]) tallyByInv[inv] = [];
+    tallyByInv[inv].push(r);
+  });
+  const gstrByInv: Record<string, any[]> = {};
+  gstrRows.forEach((r: any) => {
+    const inv = cleanString(String(r['Invoice number'] || ''));
+    if (!gstrByInv[inv]) gstrByInv[inv] = [];
+    gstrByInv[inv].push(r);
+  });
 
-  recoRows.forEach(row => {
-    const remark = row['Remarks'] || '';
-    if (remark === 'Not in our data') {
-      notInOurData.push({
+  const notInOurData: any[] = [], notInGSTR2B: any[] = [], gstinMismatches: any[] = [], figNotMatched: any[] = [];
+
+  recoOutput.forEach((row: any) => {
+    const remark = row['Remarks'];
+    const inv = cleanString(String(row['Invoice number'] || ''));
+    const gstin = cleanString(String(row['GSTIN of supplier'] || ''));
+
+    if (row['DATA'] === 'GSTR 2B' && remark === 'Not in our data') {
+      const tallyMatches = tallyByInv[inv] || [];
+      let reason = 'Invoice not found in Tally/Accounts. Please add this invoice in Tally/Accounts and run the reconciliation again.';
+      let tallyGSTIN = '', suggestion = '', isGSTINIssue = false;
+      if (tallyMatches.length > 0) {
+        const tGSTIN = cleanString(normalise(String(tallyMatches[0].gstin || '')));
+        tallyGSTIN = normalise(String(tallyMatches[0].gstin || ''));
+        if (tGSTIN && tGSTIN !== gstin) {
+          isGSTINIssue = true;
+          const diffChars = gstin.split('').filter((c: string, i: number) => c !== (tGSTIN[i] || '')).length
+                           + Math.abs(gstin.length - tGSTIN.length);
+          if (gstin.length !== tGSTIN.length)
+            reason = `GSTIN length mismatch — GSTR-2B has ${gstin.length} chars, Tally has ${tGSTIN.length} chars (missing/extra digit)`;
+          else if (diffChars === 1)
+            reason = '1-character GSTIN typo — likely zero vs letter O, or single digit error';
+          else
+            reason = `GSTIN mismatch — ${diffChars} characters differ (wrong GSTIN entered in Tally)`;
+          suggestion = `Correct Tally GSTIN to: ${row['GSTIN of supplier']}`;
+        }
+      }
+      if (isGSTINIssue) row['Remarks'] = 'Not in our data — GSTIN Mismatch';
+      const diagRow: any = {
         'GSTIN (GSTR-2B)': row['GSTIN of supplier'],
         'Supplier': row['Trade/Legal name'],
         'Invoice Number': row['Invoice number'],
         'Invoice Date': row['Invoice Date'],
-        'Taxable Value': safeNum(row['Taxable Value (₹)']),
-        'IGST': safeNum(row['Integrated Tax(₹)']),
-        'CGST': safeNum(row['Central Tax(₹)']),
-        'SGST': safeNum(row['State/UT Tax(₹)']),
-        'Diagnosis': 'Invoice exists in GSTR-2B but not found in your data. Check if bill was physically received.',
-      });
-    } else if (remark === 'Not in GSTR 2B') {
-      notInGSTR2B.push({
+        'Taxable Value': row['Taxable Value (₹)'],
+        'IGST': row['Integrated Tax(₹)'],
+        'CGST': row['Central Tax(₹)'],
+        'SGST': row['State/UT Tax(₹)'],
+        'Diagnosis': reason,
+        'Action': suggestion,
+      };
+      if (isGSTINIssue) {
+        gstinMismatches.push({
+          'Source': 'GSTR-2B side',
+          'GSTIN (GSTR-2B)': row['GSTIN of supplier'] || '',
+          'GSTIN (Tally)': tallyGSTIN,
+          'Supplier': row['Trade/Legal name'] || '',
+          'Invoice Number': row['Invoice number'] || '',
+          'Invoice Date': row['Invoice Date'] || '',
+          'Taxable Value': row['Taxable Value (₹)'],
+          'IGST': row['Integrated Tax(₹)'],
+          'CGST': row['Central Tax(₹)'],
+          'SGST': row['State/UT Tax(₹)'],
+          'Diagnosis': reason,
+          'Correct the Tally/Accounts GSTIN to': row['GSTIN of supplier'] || '',
+        });
+      } else {
+        notInOurData.push(diagRow);
+      }
+    }
+
+    if (row['DATA'] === 'Our Data' && remark === 'Not in GSTR 2B') {
+      const gstrMatches = gstrByInv[inv] || [];
+      let reason = 'Invoice may not be filed by supplier in GSTR-1 yet';
+      let gstrGSTIN = '', suggestion = '', isGSTINIssue = false;
+      if (gstrMatches.length > 0) {
+        const gG = cleanString(String(gstrMatches[0]['GSTIN of supplier'] || ''));
+        gstrGSTIN = String(gstrMatches[0]['GSTIN of supplier'] || '');
+        if (gG && gG !== gstin) {
+          isGSTINIssue = true;
+          const diffChars = gstin.split('').filter((c: string, i: number) => c !== (gG[i] || '')).length
+                           + Math.abs(gstin.length - gG.length);
+          if (gstin.length !== gG.length)
+            reason = `GSTIN length mismatch — Tally has ${gstin.length} chars, GSTR-2B has ${gG.length} chars`;
+          else if (diffChars === 1)
+            reason = '1-character GSTIN typo in Tally — check for zero vs letter O';
+          else
+            reason = `GSTIN mismatch — ${diffChars} chars differ (wrong GSTIN in Tally)`;
+          suggestion = `Correct Tally GSTIN to: ${gstrGSTIN}`;
+        }
+      }
+      if (isGSTINIssue) row['Remarks'] = 'Not in GSTR 2B — GSTIN Mismatch';
+      const diagRow: any = {
         'GSTIN (Tally)': row['GSTIN of supplier'],
         'Supplier': row['Trade/Legal name'],
         'Invoice Number': row['Invoice number'],
         'Invoice Date': row['Invoice Date'],
-        'Taxable Value': safeNum(row['Taxable Value (₹)']),
-        'IGST': safeNum(row['Integrated Tax(₹)']),
-        'CGST': safeNum(row['Central Tax(₹)']),
-        'SGST': safeNum(row['State/UT Tax(₹)']),
-        'Diagnosis': 'Invoice in your data but NOT in GSTR-2B. Supplier may not have filed GSTR-1. ITC at risk.',
-      });
-    } else if (remark === 'Fig Not Matched') {
-      figNotMatched.push({
-        'GSTIN': row['GSTIN of supplier'],
-        'Supplier': row['Trade/Legal name'],
-        'Invoice Number': row['Invoice number'],
-        'DATA Source': row['DATA'],
-        'Taxable Value': safeNum(row['Taxable Value (₹)']),
-        'IGST': safeNum(row['Integrated Tax(₹)']),
-        'CGST': safeNum(row['Central Tax(₹)']),
-        'SGST': safeNum(row['State/UT Tax(₹)']),
-        'Diagnosis': 'Figures differ between GSTR-2B and your data. Check for rounding or data entry errors.',
-      });
+        'Taxable Value': row['Taxable Value (₹)'],
+        'IGST': row['Integrated Tax(₹)'],
+        'CGST': row['Central Tax(₹)'],
+        'SGST': row['State/UT Tax(₹)'],
+        'Diagnosis': reason,
+        'Action': suggestion,
+      };
+      if (isGSTINIssue) {
+        gstinMismatches.push({
+          'Source': 'Tally side',
+          'GSTIN (GSTR-2B)': gstrGSTIN,
+          'GSTIN (Tally)': row['GSTIN of supplier'] || '',
+          'Supplier': row['Trade/Legal name'] || '',
+          'Invoice Number': row['Invoice number'] || '',
+          'Invoice Date': row['Invoice Date'] || '',
+          'Taxable Value': row['Taxable Value (₹)'],
+          'IGST': row['Integrated Tax(₹)'],
+          'CGST': row['Central Tax(₹)'],
+          'SGST': row['State/UT Tax(₹)'],
+          'Diagnosis': reason,
+          'Correct the Tally/Accounts GSTIN to': gstrGSTIN || row['GSTIN of supplier'] || '',
+        });
+      } else {
+        notInGSTR2B.push(diagRow);
+      }
     }
   });
 
-  // GSTIN mismatch detection
-  const gstrUnmatched = recoRows.filter(r => r['Remarks'] === 'Not in our data');
-  const ourUnmatched = recoRows.filter(r => r['Remarks'] === 'Not in GSTR 2B');
-  const gstinMismatches: any[] = [];
-
-  gstrUnmatched.forEach(gRow => {
-    const gInv = cleanString(gRow['Invoice number'] || '');
-    if (!gInv) return;
-    ourUnmatched.forEach(oRow => {
-      const oInv = cleanString(oRow['Invoice number'] || '');
-      if (gInv === oInv) {
-        const gGstin = String(gRow['GSTIN of supplier'] || '');
-        const oGstin = String(oRow['GSTIN of supplier'] || '');
-        if (cleanString(gGstin) !== cleanString(oGstin)) {
-          gstinMismatches.push({
-            'Invoice Number': gRow['Invoice number'],
-            'GSTR-2B GSTIN': gGstin,
-            'Our Data GSTIN': oGstin,
-            'GSTR-2B Supplier': gRow['Trade/Legal name'],
-            'Our Data Supplier': oRow['Trade/Legal name'],
-            'Diagnosis': 'Same invoice found with different GSTINs. Correct the GSTIN in your records.',
-          });
-        }
-      }
+  // Fig Not Matched pairs — diagnose WHY amounts differ
+  const seenFigInv = new Set<string>();
+  recoOutput.forEach((row: any) => {
+    if (row['DATA'] !== 'GSTR 2B') return;
+    const rem = String(row['Remarks'] || '');
+    if (!rem.startsWith('Fig Not Matched')) return;
+    const inv = cleanString(String(row['Invoice number'] || ''));
+    if (seenFigInv.has(inv)) return;
+    seenFigInv.add(inv);
+    const partner = recoOutput.find((r: any) => r['DATA'] === 'Our Data' && cleanString(String(r['Invoice number'] || '')) === inv);
+    if (!partner) return;
+    const gstrTax = safeNum(row['Taxable Value (₹)']);
+    const ourTax = safeNum(partner['Taxable Value (₹)']);
+    const gstrIGST = safeNum(row['Integrated Tax(₹)']);
+    const ourIGST = safeNum(partner['Integrated Tax(₹)']);
+    const gstrCGST = safeNum(row['Central Tax(₹)']);
+    const ourCGST = safeNum(partner['Central Tax(₹)']);
+    const gstrSGST = safeNum(row['State/UT Tax(₹)']);
+    const ourSGST = safeNum(partner['State/UT Tax(₹)']);
+    const taxDiff = Math.round((numVal(gstrTax) - numVal(ourTax)) * 100) / 100;
+    const igstDiff = Math.round((numVal(gstrIGST) - numVal(ourIGST)) * 100) / 100;
+    const cgstDiff = Math.round((numVal(gstrCGST) - numVal(ourCGST)) * 100) / 100;
+    const sgstDiff = Math.round((numVal(gstrSGST) - numVal(ourSGST)) * 100) / 100;
+    const itcDiff = Math.round((igstDiff + cgstDiff + sgstDiff) * 100) / 100;
+    const absTax = Math.abs(taxDiff), absItc = Math.abs(itcDiff);
+    const isInterstate = (numVal(gstrIGST) > 0 && numVal(ourCGST) > 0 && numVal(ourIGST) === 0) || (numVal(ourIGST) > 0 && numVal(gstrCGST) > 0 && numVal(gstrIGST) === 0);
+    let diagnosis: string, sortPri: number;
+    if (absTax <= 1 && absItc <= 1) {
+      diagnosis = 'Rounding off difference only, can be ignored'; sortPri = 3;
+    } else if (isInterstate) {
+      diagnosis = 'Interstate vs Intrastate mismatch — IGST vs CGST+SGST type differs between GSTR-2B and accounts'; sortPri = 1;
+    } else if (numVal(gstrTax) > 0 && absTax <= numVal(gstrTax) * 0.01) {
+      diagnosis = 'Minor difference (less than 1%) — likely rounding across line items'; sortPri = 3;
+    } else {
+      diagnosis = 'Significant amount mismatch — cross-check physical bill with accounts entry'; sortPri = 1;
+    }
+    figNotMatched.push({
+      'Diagnosis': diagnosis,
+      'Supplier': String(row['Trade/Legal name'] || ''),
+      'GSTIN': String(row['GSTIN of supplier'] || ''),
+      'Invoice Number': String(row['Invoice number'] || ''),
+      'Invoice Date': String(row['Invoice Date'] || ''),
+      'Taxable Value (GSTR-2B)': gstrTax,
+      'Taxable Value (Accounts)': ourTax,
+      'Taxable Difference': taxDiff,
+      'IGST Diff (+ = Add to books / - = Reduce in books)': igstDiff,
+      'CGST Diff (+ = Add to books / - = Reduce in books)': cgstDiff,
+      'SGST Diff (+ = Add to books / - = Reduce in books)': sgstDiff,
+      'Net ITC Difference (Rs.)': itcDiff,
+      _sp: sortPri,
     });
   });
+  figNotMatched.sort((a: any, b: any) => a._sp - b._sp);
+  figNotMatched.forEach((r: any) => { delete r._sp; });
 
-  return { notInOurData, notInGSTR2B, figNotMatched, gstinMismatches };
+  return { notInOurData, notInGSTR2B, gstinMismatches, figNotMatched };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -281,7 +395,7 @@ export function reconcilePRTally(prResult: any, tallyResult4: any) {
     if (!pr) {
       status = 'NOT_IN_PR';
     } else {
-      const prRow = prRows.find(r => r.ck === ck);
+      const prRow = prRows.find((r: any) => r.ck === ck);
       status = prRow ? prRow.status : 'MATCHED';
     }
 
@@ -295,11 +409,26 @@ export function reconcilePRTally(prResult: any, tallyResult4: any) {
     tallyRows.push({ t, pr, ck, status, diffs });
   });
 
+  // Build row-index maps for cross-sheet hyperlinks
+  const prRowIndex: Record<string, number> = {};
+  const tallyRowIndex: Record<string, number> = {};
+  prResult.rawRows.forEach((rowObj: any, i: number) => {
+    if (rowObj.billKey && !(rowObj.billKey in prRowIndex)) {
+      prRowIndex[rowObj.billKey] = i + 2;
+    }
+  });
+  tallyResult4.rawRows.forEach((rowObj: any, i: number) => {
+    if (rowObj.billKey && !(rowObj.billKey in tallyRowIndex)) {
+      tallyRowIndex[rowObj.billKey] = i + 2;
+    }
+  });
+
   return {
     prRows, tallyRows,
     mismatchCount: prRows.filter(r => r.status === 'MISMATCH').length,
     missingCount: prRows.filter(r => r.status === 'MISSING_IN_TALLY').length,
     extraCount: tallyRows.filter(r => r.status === 'NOT_IN_PR').length,
     prRaw: prResult, tallyRaw: tallyResult4,
+    prRowIndex, tallyRowIndex,
   };
 }

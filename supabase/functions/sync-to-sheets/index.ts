@@ -13,18 +13,11 @@ interface GoogleTokenResponse {
   token_type: string;
 }
 
-async function getAccessToken(serviceAccountKey: string): Promise<string> {
-  // Try to clean up the key - handle potential encoding issues
-  let keyStr = serviceAccountKey.trim();
-  // Remove potential wrapping quotes
-  if ((keyStr.startsWith('"') && keyStr.endsWith('"')) || (keyStr.startsWith("'") && keyStr.endsWith("'"))) {
-    keyStr = keyStr.slice(1, -1);
-  }
-  // Unescape if double-escaped
-  keyStr = keyStr.replace(/\\n/g, '\n').replace(/\\"/g, '"');
-  
-  console.log("Key starts with:", keyStr.substring(0, 5), "length:", keyStr.length);
-  const sa = JSON.parse(keyStr);
+async function getAccessToken(clientEmail: string, privateKey: string): Promise<string> {
+  // Handle escaped newlines in private key
+  const cleanKey = privateKey.replace(/\\n/g, '\n');
+  console.log("Client email:", clientEmail);
+  console.log("Private key length:", cleanKey.length, "starts with:", cleanKey.substring(0, 30));
   const now = Math.floor(Date.now() / 1000);
 
   const header = btoa(JSON.stringify({ alg: "RS256", typ: "JWT" }));

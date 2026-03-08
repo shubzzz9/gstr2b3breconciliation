@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import XLSX from 'xlsx-js-style';
@@ -9,12 +8,12 @@ import { reconcile, diagnoseMismatches, reconcilePRTally } from '@/lib/gst-recon
 import { downloadFile1, downloadFile2, downloadFile3, downloadPRTallyAudit } from '@/lib/gst-downloads';
 import { TALLY_SINGLE_ROWS, TALLY_MULTI_ROWS } from '@/lib/gst-helpers';
 import ContactPaywall from '@/components/ContactPaywall';
+import AuthModal from '@/components/AuthModal';
 
 type Mode = 'tally' | 'full' | 'combined' | 'prtally' | null;
 
 const Tool = () => {
   const { user, loading, signOut } = useAuth();
-  const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [mode, setMode] = useState<Mode>(null);
   const [error, setError] = useState('');
@@ -52,10 +51,8 @@ const Tool = () => {
   const [exportCount, setExportCount] = useState(0);
   const [maxExports, setMaxExports] = useState(10);
   const [showPaywall, setShowPaywall] = useState(false);
-
-  useEffect(() => {
-    if (!loading && !user) navigate('/auth');
-  }, [user, loading, navigate]);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [pendingDownload, setPendingDownload] = useState<{ type: string; fn: () => void } | null>(null);
 
   const loadUsage = useCallback(async () => {
     if (!user) return;
@@ -74,6 +71,37 @@ const Tool = () => {
     await supabase.from('export_logs').insert({ user_id: user.id, export_type: type });
     setExportCount(prev => prev + 1);
     return true;
+  };
+
+  const handleDownload = async (type: string, fn: () => void) => {
+    if (!user) {
+      setPendingDownload({ type, fn });
+      setShowAuthModal(true);
+      return;
+    }
+    if (await trackExport(type)) fn();
+  };
+
+  const handleAuthSuccess = async () => {
+    setShowAuthModal(false);
+    // After login, reload usage and retry the pending download
+    const { data: { user: freshUser } } = await supabase.auth.getUser();
+    if (!freshUser || !pendingDownload) { setPendingDownload(null); return; }
+    // Reload usage
+    const { data: count } = await supabase.rpc('get_export_count', { p_user_id: freshUser.id });
+    setExportCount(count || 0);
+    const { data: profile } = await supabase.from('profiles').select('max_exports, is_blocked').eq('user_id', freshUser.id).single();
+    if (profile) { setMaxExports(profile.max_exports); }
+    // Try export
+    const { data: canExport } = await supabase.rpc('can_user_export', { p_user_id: freshUser.id });
+    if (canExport) {
+      await supabase.from('export_logs').insert({ user_id: freshUser.id, export_type: pendingDownload.type });
+      setExportCount(prev => prev + 1);
+      pendingDownload.fn();
+    } else {
+      setShowPaywall(true);
+    }
+    setPendingDownload(null);
   };
 
   const handleFile = (file: File, setter: (wb: any) => void, nameSetter: (n: string) => void) => {
@@ -185,9 +213,6 @@ const Tool = () => {
     } catch (e: any) { setError('Processing error: ' + e.message); setStep(2); }
   };
 
-  const handleDownload = async (type: string, fn: () => void) => {
-    if (await trackExport(type)) fn();
-  };
 
   const resetTool = () => {
     setStep(1); setMode(null); setError('');
@@ -210,10 +235,16 @@ const Tool = () => {
             <h1 className="text-lg md:text-xl font-bold">🧾 GST Reconciliation Tool</h1>
             <p className="text-xs opacity-85 mt-1">Convert, compare and reconcile your Purchase Data with GSTR-2B</p>
           </div>
-          <div className="flex items-center gap-3 text-sm">
-            <span className="bg-white/20 px-2 py-1 rounded text-xs">{exportCount}/{maxExports} exports</span>
-            <button onClick={() => signOut()} className="text-xs underline opacity-80 hover:opacity-100">Sign Out</button>
-          </div>
+          {user ? (
+            <div className="flex items-center gap-3 text-sm">
+              <span className="bg-white/20 px-2 py-1 rounded text-xs">{exportCount}/{maxExports} exports</span>
+              <button onClick={() => signOut()} className="text-xs underline opacity-80 hover:opacity-100">Sign Out</button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 text-sm">
+              <span className="bg-white/20 px-2 py-1 rounded text-xs">🎁 10 free exports on signup</span>
+            </div>
+          )}
         </div>
 
         <div className="bg-card rounded-b-xl p-5 md:p-8 shadow-lg border border-border border-t-0">
@@ -448,6 +479,7 @@ const Tool = () => {
       </div>
 
       {showPaywall && <ContactPaywall onClose={() => setShowPaywall(false)} exportCount={exportCount} maxExports={maxExports} />}
+      {showAuthModal && <AuthModal onClose={() => { setShowAuthModal(false); setPendingDownload(null); }} onSuccess={handleAuthSuccess} />}
     </div>
   );
 };

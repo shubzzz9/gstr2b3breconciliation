@@ -72,7 +72,10 @@ const Admin = () => {
   };
 
   const checkAdmin = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      setChecking(false);
+      return;
+    }
     const { data } = await supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' });
     setIsAdmin(!!data);
     setChecking(false);

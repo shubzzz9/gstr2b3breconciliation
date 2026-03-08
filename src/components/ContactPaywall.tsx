@@ -31,7 +31,7 @@ const ContactPaywall = ({ onClose, exportCount, maxExports }: ContactPaywallProp
             </a>
             
             <a
-              href="https://wa.me/?text=Hi%2C%20I%20want%20to%20purchase%20more%20exports%20for%20the%20GST%20Reconciliation%20Tool"
+              href="https://wa.me/918668606224?text=Hi%2C%20I%20want%20to%20purchase%20more%20exports%20for%20the%20GST%20Reconciliation%20Tool"
               target="_blank"
               rel="noopener noreferrer"
               className="btn-tool bg-success text-success-foreground hover:opacity-90 flex items-center justify-center gap-2"

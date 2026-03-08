@@ -252,7 +252,6 @@ const Tool = () => {
         {/* Tool Header */}
         <div className="gradient-header text-primary-foreground p-5 rounded-t-xl flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="text-lg md:text-xl font-bold">🧾 GST Reconciliation Tool</h2>
             <p className="text-xs opacity-85 mt-1">Convert, compare and reconcile your Purchase Data with GSTR-2B</p>
           </div>
           {user && (

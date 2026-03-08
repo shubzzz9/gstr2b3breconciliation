@@ -16,7 +16,6 @@ const Tool = () => {
   const { user, loading, signOut } = useAuth();
   const [step, setStep] = useState(1);
   const [mode, setMode] = useState<Mode>(null);
-  const [mode, setMode] = useState<Mode>(null);
   const [error, setError] = useState('');
 
   // Files

@@ -492,8 +492,6 @@ const Tool = () => {
             </div>
           )}
         </div>
-
-        </div>
       </div>
       </main>
       <Footer />

@@ -73,6 +73,34 @@ const Tool = () => {
     return true;
   };
 
+  const handleDownload = async (type: string, fn: () => void) => {
+    if (!user) {
+      setPendingDownload({ type, fn });
+      setShowAuthModal(true);
+      return;
+    }
+    if (await trackExport(type)) fn();
+  };
+
+  const handleAuthSuccess = async () => {
+    setShowAuthModal(false);
+    await loadUsage();
+    if (pendingDownload) {
+      const { type, fn } = pendingDownload;
+      setPendingDownload(null);
+      // Re-check after login
+      const { data: canExport } = await supabase.rpc('can_user_export', { p_user_id: pendingDownload.type === type ? (await supabase.auth.getUser()).data.user!.id : '' });
+      if (canExport) {
+        const userId = (await supabase.auth.getUser()).data.user!.id;
+        await supabase.from('export_logs').insert({ user_id: userId, export_type: type });
+        setExportCount(prev => prev + 1);
+        fn();
+      } else {
+        setShowPaywall(true);
+      }
+    }
+  };
+
   const handleFile = (file: File, setter: (wb: any) => void, nameSetter: (n: string) => void) => {
     const reader = new FileReader();
     reader.onload = (e) => {

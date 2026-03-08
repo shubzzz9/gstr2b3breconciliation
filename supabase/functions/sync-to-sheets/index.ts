@@ -1,4 +1,4 @@
-// Sync data to Google Sheets
+// v2: Sync data to Google Sheets using separate secrets
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {

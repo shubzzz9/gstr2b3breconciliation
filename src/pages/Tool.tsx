@@ -54,8 +54,8 @@ const Tool = () => {
   const [showPaywall, setShowPaywall] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [pendingDownload, setPendingDownload] = useState<{ type: string; fn: () => void } | null>(null);
-    if (!loading && !user) navigate('/auth');
-  }, [user, loading, navigate]);
+
+  useEffect(() => { loadUsage(); }, [loadUsage]);
 
   const loadUsage = useCallback(async () => {
     if (!user) return;

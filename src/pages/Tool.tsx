@@ -205,7 +205,7 @@ const Tool = () => {
         setRecoRows(reco);
         setProgress(85);
         setProgressLabel('Diagnosing mismatches...');
-        const diag = diagnoseMismatches(reco);
+        const diag = diagnoseMismatches(gstrRows, tResult.rows, reco);
         setDiagData(diag);
       }
       setProgress(100);

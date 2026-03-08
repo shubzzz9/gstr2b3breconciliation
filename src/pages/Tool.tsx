@@ -210,9 +210,6 @@ const Tool = () => {
     } catch (e: any) { setError('Processing error: ' + e.message); setStep(2); }
   };
 
-  const handleDownload = async (type: string, fn: () => void) => {
-    if (await trackExport(type)) fn();
-  };
 
   const resetTool = () => {
     setStep(1); setMode(null); setError('');

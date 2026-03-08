@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import XLSX from 'xlsx-js-style';
@@ -7,6 +7,7 @@ import { scanTally, processTally, scanGSTR2B, parseGSTR2B, parseCombined, parseP
 import { reconcile, diagnoseMismatches, reconcilePRTally } from '@/lib/gst-reconcile';
 import { downloadFile1, downloadFile2, downloadFile3, downloadPRTallyAudit } from '@/lib/gst-downloads';
 import { TALLY_SINGLE_ROWS, TALLY_MULTI_ROWS } from '@/lib/gst-helpers';
+import { generateFingerprint } from '@/lib/fingerprint';
 import ContactPaywall from '@/components/ContactPaywall';
 import AuthModal from '@/components/AuthModal';
 

@@ -245,20 +245,22 @@ const Tool = () => {
   const stepLabels = ['1 · Upload', '2 · Map Columns', '3 · Processing', '4 · Download'];
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-6">
+    <div className="min-h-screen bg-background flex flex-col">
+      <Navbar />
+      <main className="flex-1 p-4 md:p-6">
       <div className="max-w-[1100px] mx-auto">
-        {/* Header */}
+        {/* Tool Header */}
         <div className="gradient-header text-primary-foreground p-5 rounded-t-xl flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-lg md:text-xl font-bold">🧾 GST Reconciliation Tool</h1>
+            <h2 className="text-lg md:text-xl font-bold">🧾 GST Reconciliation Tool</h2>
             <p className="text-xs opacity-85 mt-1">Convert, compare and reconcile your Purchase Data with GSTR-2B</p>
           </div>
-          {user ? (
+          {user && (
             <div className="flex items-center gap-3 text-sm">
               <span className="bg-white/20 px-2 py-1 rounded text-xs">{exportCount}/{maxExports} exports</span>
-              <button onClick={() => signOut()} className="text-xs underline opacity-80 hover:opacity-100">Sign Out</button>
             </div>
-          ) : (
+          )}
+          {!user && (
             <div className="flex items-center gap-3 text-sm">
               <span className="bg-white/20 px-2 py-1 rounded text-xs">🎁 10 free exports on signup</span>
             </div>

@@ -1,4 +1,4 @@
-// Sync data to Google Sheets
+// v2: Sync data to Google Sheets using separate secrets
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -13,24 +13,20 @@ interface GoogleTokenResponse {
   token_type: string;
 }
 
-async function getAccessToken(serviceAccountKey: string): Promise<string> {
-  // Try to clean up the key - handle potential encoding issues
-  let keyStr = serviceAccountKey.trim();
-  // Remove potential wrapping quotes
-  if ((keyStr.startsWith('"') && keyStr.endsWith('"')) || (keyStr.startsWith("'") && keyStr.endsWith("'"))) {
-    keyStr = keyStr.slice(1, -1);
-  }
-  // Unescape if double-escaped
-  keyStr = keyStr.replace(/\\n/g, '\n').replace(/\\"/g, '"');
-  
-  console.log("Key starts with:", keyStr.substring(0, 5), "length:", keyStr.length);
-  const sa = JSON.parse(keyStr);
+function toBase64Url(str: string): string {
+  return btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+async function getAccessToken(clientEmail: string, privateKey: string): Promise<string> {
+  const cleanKey = privateKey.replace(/\\n/g, '\n');
+  console.log("Client email:", clientEmail);
+  console.log("Private key length:", cleanKey.length);
   const now = Math.floor(Date.now() / 1000);
 
-  const header = btoa(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const claim = btoa(
+  const headerB64 = toBase64Url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+  const claimB64 = toBase64Url(
     JSON.stringify({
-      iss: sa.client_email,
+      iss: clientEmail,
       scope: "https://www.googleapis.com/auth/spreadsheets",
       aud: "https://oauth2.googleapis.com/token",
       exp: now + 3600,
@@ -38,13 +34,14 @@ async function getAccessToken(serviceAccountKey: string): Promise<string> {
     })
   );
 
-  const unsignedToken = `${header}.${claim}`;
+  const unsignedToken = `${headerB64}.${claimB64}`;
 
   // Import private key
-  const pemContents = sa.private_key
+  const pemContents = cleanKey
     .replace(/-----BEGIN PRIVATE KEY-----/, "")
     .replace(/-----END PRIVATE KEY-----/, "")
-    .replace(/\n/g, "");
+    .replace(/\n/g, "")
+    .trim();
 
   const binaryKey = Uint8Array.from(atob(pemContents), (c) => c.charCodeAt(0));
 
@@ -62,14 +59,12 @@ async function getAccessToken(serviceAccountKey: string): Promise<string> {
     new TextEncoder().encode(unsignedToken)
   );
 
-  const signatureB64 = btoa(
-    String.fromCharCode(...new Uint8Array(signature))
-  )
+  const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");
 
-  const jwt = `${header.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}.${claim.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}.${signatureB64}`;
+  const jwt = `${headerB64}.${claimB64}.${signatureB64}`;
 
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -141,20 +136,12 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  try {
-    const serviceAccountKeyRaw = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_KEY");
-    if (!serviceAccountKeyRaw) throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY not set");
+   try {
+    const clientEmail = Deno.env.get("GOOGLE_CLIENT_EMAIL");
+    if (!clientEmail) throw new Error("GOOGLE_CLIENT_EMAIL not set");
 
-    // Handle potential double-encoding of the JSON secret
-    let serviceAccountKey = serviceAccountKeyRaw;
-    // If the string starts with a quote, it may be double-JSON-encoded
-    if (serviceAccountKey.startsWith('"') || serviceAccountKey.startsWith("'")) {
-      try {
-        serviceAccountKey = JSON.parse(serviceAccountKey);
-      } catch {
-        // not double encoded, use as-is
-      }
-    }
+    const privateKey = Deno.env.get("GOOGLE_PRIVATE_KEY");
+    if (!privateKey) throw new Error("GOOGLE_PRIVATE_KEY not set");
 
     const sheetId = Deno.env.get("GOOGLE_SHEET_ID");
     if (!sheetId) throw new Error("GOOGLE_SHEET_ID not set");
@@ -164,9 +151,7 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log("Attempting to get access token...");
-    console.log("Service account key starts with:", serviceAccountKey.substring(0, 20));
-    const accessToken = await getAccessToken(serviceAccountKey);
+    const accessToken = await getAccessToken(clientEmail, privateKey);
 
     // Fetch profiles (signups)
     const { data: profiles, error: profilesErr } = await supabase

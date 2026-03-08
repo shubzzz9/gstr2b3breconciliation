@@ -131,8 +131,19 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const serviceAccountKey = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_KEY");
-    if (!serviceAccountKey) throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY not set");
+    const serviceAccountKeyRaw = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_KEY");
+    if (!serviceAccountKeyRaw) throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY not set");
+
+    // Handle potential double-encoding of the JSON secret
+    let serviceAccountKey = serviceAccountKeyRaw;
+    // If the string starts with a quote, it may be double-JSON-encoded
+    if (serviceAccountKey.startsWith('"') || serviceAccountKey.startsWith("'")) {
+      try {
+        serviceAccountKey = JSON.parse(serviceAccountKey);
+      } catch {
+        // not double encoded, use as-is
+      }
+    }
 
     const sheetId = Deno.env.get("GOOGLE_SHEET_ID");
     if (!sheetId) throw new Error("GOOGLE_SHEET_ID not set");

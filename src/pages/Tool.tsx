@@ -248,6 +248,8 @@ const Tool = () => {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
+      {/* Top Ad Banner */}
+      <AdBanner slot="TOP_AD_SLOT" className="py-2 bg-secondary" />
       <main className="flex-1 p-4 md:p-6">
       <div className="max-w-[1100px] mx-auto">
         {/* Tool Header */}

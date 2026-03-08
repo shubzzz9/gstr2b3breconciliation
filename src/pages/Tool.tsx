@@ -54,8 +54,6 @@ const Tool = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [pendingDownload, setPendingDownload] = useState<{ type: string; fn: () => void } | null>(null);
 
-  useEffect(() => { loadUsage(); }, [loadUsage]);
-
   const loadUsage = useCallback(async () => {
     if (!user) return;
     const { data: count } = await supabase.rpc('get_export_count', { p_user_id: user.id });

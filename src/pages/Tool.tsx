@@ -182,7 +182,7 @@ const Tool = () => {
         const reco = reconcile(tallyResult.gstrRows, tallyResult.ourRows);
         setRecoRows(reco);
         setProgress(70);
-        const diag = diagnoseMismatches(reco);
+        const diag = diagnoseMismatches(tallyResult.gstrRows, tallyResult.ourRows, reco);
         setDiagData(diag);
         setProgress(100);
         setStep(4);
@@ -205,7 +205,7 @@ const Tool = () => {
         setRecoRows(reco);
         setProgress(85);
         setProgressLabel('Diagnosing mismatches...');
-        const diag = diagnoseMismatches(reco);
+        const diag = diagnoseMismatches(gstrRows, tResult.rows, reco);
         setDiagData(diag);
       }
       setProgress(100);

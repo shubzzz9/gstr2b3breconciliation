@@ -19,6 +19,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Tool />} />
           <Route path="/auth" element={<Auth />} />
+          <Route path="/admin" element={<Admin />} />
           <Route path="/tool" element={<Navigate to="/" replace />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

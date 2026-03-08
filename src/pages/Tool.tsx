@@ -493,10 +493,10 @@ const Tool = () => {
           )}
         </div>
 
-        <div className="text-center mt-4 text-xs text-muted-foreground italic">
-          Developed by <strong className="text-warning">TechBharat Studios</strong> · <a href="mailto:techbharatstudios@gmail.com" className="underline">techbharatstudios@gmail.com</a>
         </div>
       </div>
+      </main>
+      <Footer />
 
       {showPaywall && <ContactPaywall onClose={() => setShowPaywall(false)} exportCount={exportCount} maxExports={maxExports} />}
       {showAuthModal && <AuthModal onClose={() => { setShowAuthModal(false); setPendingDownload(null); }} onSuccess={handleAuthSuccess} />}

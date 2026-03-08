@@ -13,15 +13,18 @@ interface GoogleTokenResponse {
   token_type: string;
 }
 
+function toBase64Url(str: string): string {
+  return btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
 async function getAccessToken(clientEmail: string, privateKey: string): Promise<string> {
-  // Handle escaped newlines in private key
   const cleanKey = privateKey.replace(/\\n/g, '\n');
   console.log("Client email:", clientEmail);
-  console.log("Private key length:", cleanKey.length, "starts with:", cleanKey.substring(0, 30));
+  console.log("Private key length:", cleanKey.length);
   const now = Math.floor(Date.now() / 1000);
 
-  const header = btoa(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const claim = btoa(
+  const headerB64 = toBase64Url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+  const claimB64 = toBase64Url(
     JSON.stringify({
       iss: clientEmail,
       scope: "https://www.googleapis.com/auth/spreadsheets",
@@ -31,13 +34,14 @@ async function getAccessToken(clientEmail: string, privateKey: string): Promise<
     })
   );
 
-  const unsignedToken = `${header}.${claim}`;
+  const unsignedToken = `${headerB64}.${claimB64}`;
 
   // Import private key
   const pemContents = cleanKey
     .replace(/-----BEGIN PRIVATE KEY-----/, "")
     .replace(/-----END PRIVATE KEY-----/, "")
-    .replace(/\n/g, "");
+    .replace(/\n/g, "")
+    .trim();
 
   const binaryKey = Uint8Array.from(atob(pemContents), (c) => c.charCodeAt(0));
 
@@ -55,14 +59,12 @@ async function getAccessToken(clientEmail: string, privateKey: string): Promise<
     new TextEncoder().encode(unsignedToken)
   );
 
-  const signatureB64 = btoa(
-    String.fromCharCode(...new Uint8Array(signature))
-  )
+  const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");
 
-  const jwt = `${header.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}.${claim.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}.${signatureB64}`;
+  const jwt = `${headerB64}.${claimB64}.${signatureB64}`;
 
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",

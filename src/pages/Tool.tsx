@@ -52,8 +52,8 @@ const Tool = () => {
   const [exportCount, setExportCount] = useState(0);
   const [maxExports, setMaxExports] = useState(10);
   const [showPaywall, setShowPaywall] = useState(false);
-
-  useEffect(() => {
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [pendingDownload, setPendingDownload] = useState<{ type: string; fn: () => void } | null>(null);
     if (!loading && !user) navigate('/auth');
   }, [user, loading, navigate]);
 

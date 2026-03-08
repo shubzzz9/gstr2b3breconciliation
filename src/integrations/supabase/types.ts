@@ -110,17 +110,110 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      admin_get_all_devices: {
+        Args: never
+        Returns: {
+          export_count: number
+          fingerprint: string
+          first_seen_at: string
+          id: string
+          ip_address: string | null
+          is_blocked: boolean
+          last_seen_at: string
+          metadata: Json | null
+          user_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "device_fingerprints"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      admin_get_all_export_logs: {
+        Args: never
+        Returns: {
+          created_at: string
+          device_fingerprint: string | null
+          export_type: string
+          id: string
+          ip_address: string | null
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "export_logs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      admin_get_all_profiles: {
+        Args: never
+        Returns: {
+          created_at: string
+          full_name: string | null
+          id: string
+          is_blocked: boolean
+          max_exports: number
+          phone: string | null
+          updated_at: string
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      admin_set_device_blocked: {
+        Args: { p_blocked: boolean; p_fingerprint: string }
+        Returns: undefined
+      }
+      admin_set_max_exports: {
+        Args: { p_max: number; p_target_user_id: string }
+        Returns: undefined
+      }
+      admin_set_user_blocked: {
+        Args: { p_blocked: boolean; p_target_user_id: string }
+        Returns: undefined
+      }
       can_device_export: {
         Args: { p_fingerprint: string; p_ip: string }
         Returns: boolean
       }
       can_user_export: { Args: { p_user_id: string }; Returns: boolean }
       get_export_count: { Args: { p_user_id: string }; Returns: number }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       log_export_with_device: {
         Args: {
           p_export_type: string
@@ -132,7 +225,7 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "moderator" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -259,6 +352,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "moderator", "user"],
+    },
   },
 } as const

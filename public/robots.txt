@@ -1,8 +1,11 @@
+# Robots.txt for GSTR-2B Reconciliation Tool
 User-agent: Googlebot
 Allow: /
+Disallow: /admin
 
 User-agent: Bingbot
 Allow: /
+Disallow: /admin
 
 User-agent: Twitterbot
 Allow: /
@@ -12,3 +15,6 @@ Allow: /
 
 User-agent: *
 Allow: /
+Disallow: /admin
+
+Sitemap: https://gstr2b3breconciliation.lovable.app/sitemap.xml

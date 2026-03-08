@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { Shield, Users, FileDown, Fingerprint, Ban, CheckCircle, ArrowLeft } from 'lucide-react';
+import { Shield, Users, FileDown, Fingerprint, Ban, CheckCircle, ArrowLeft, RefreshCw } from 'lucide-react';
 
 type Profile = {
   id: string;

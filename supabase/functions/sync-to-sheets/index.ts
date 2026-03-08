@@ -153,6 +153,8 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    console.log("Attempting to get access token...");
+    console.log("Service account key starts with:", serviceAccountKey.substring(0, 20));
     const accessToken = await getAccessToken(serviceAccountKey);
 
     // Fetch profiles (signups)

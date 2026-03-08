@@ -14,23 +14,65 @@ export type Database = {
   }
   public: {
     Tables: {
+      device_fingerprints: {
+        Row: {
+          export_count: number
+          fingerprint: string
+          first_seen_at: string
+          id: string
+          ip_address: string | null
+          is_blocked: boolean
+          last_seen_at: string
+          metadata: Json | null
+          user_id: string | null
+        }
+        Insert: {
+          export_count?: number
+          fingerprint: string
+          first_seen_at?: string
+          id?: string
+          ip_address?: string | null
+          is_blocked?: boolean
+          last_seen_at?: string
+          metadata?: Json | null
+          user_id?: string | null
+        }
+        Update: {
+          export_count?: number
+          fingerprint?: string
+          first_seen_at?: string
+          id?: string
+          ip_address?: string | null
+          is_blocked?: boolean
+          last_seen_at?: string
+          metadata?: Json | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       export_logs: {
         Row: {
           created_at: string
+          device_fingerprint: string | null
           export_type: string
           id: string
+          ip_address: string | null
           user_id: string
         }
         Insert: {
           created_at?: string
+          device_fingerprint?: string | null
           export_type: string
           id?: string
+          ip_address?: string | null
           user_id: string
         }
         Update: {
           created_at?: string
+          device_fingerprint?: string | null
           export_type?: string
           id?: string
+          ip_address?: string | null
           user_id?: string
         }
         Relationships: []
@@ -73,8 +115,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_device_export: {
+        Args: { p_fingerprint: string; p_ip: string }
+        Returns: boolean
+      }
       can_user_export: { Args: { p_user_id: string }; Returns: boolean }
       get_export_count: { Args: { p_user_id: string }; Returns: number }
+      log_export_with_device: {
+        Args: {
+          p_export_type: string
+          p_fingerprint: string
+          p_ip: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never

@@ -3,12 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { Shield, Users, FileDown, Fingerprint, Ban, CheckCircle, ArrowLeft, RefreshCw } from 'lucide-react';
+import { Shield, Users, FileDown, Fingerprint, Ban, CheckCircle, ArrowLeft, RefreshCw, Calendar, Hash, Clock } from 'lucide-react';
 
 type Profile = {
   id: string;
@@ -17,6 +17,8 @@ type Profile = {
   phone: string | null;
   is_blocked: boolean;
   max_exports: number;
+  access_mode: string;
+  access_expires_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -52,6 +54,9 @@ const Admin = () => {
   const [devices, setDevices] = useState<Device[]>([]);
   const [editingMax, setEditingMax] = useState<string | null>(null);
   const [maxVal, setMaxVal] = useState('');
+  const [editingAccess, setEditingAccess] = useState<string | null>(null);
+  const [accessMode, setAccessMode] = useState('exports');
+  const [accessExpiry, setAccessExpiry] = useState('');
   const [syncing, setSyncing] = useState(false);
 
   const syncToSheets = async () => {
@@ -90,7 +95,7 @@ const Admin = () => {
       supabase.rpc('admin_get_all_export_logs'),
       supabase.rpc('admin_get_all_devices'),
     ]);
-    if (p.data) setProfiles(p.data as Profile[]);
+    if (p.data) setProfiles(p.data as unknown as Profile[]);
     if (e.data) setExports(e.data as ExportLog[]);
     if (d.data) setDevices(d.data as Device[]);
   }, [isAdmin]);
@@ -118,6 +123,18 @@ const Admin = () => {
     loadData();
   };
 
+  const updateAccessMode = async (userId: string) => {
+    const expiresAt = accessExpiry ? new Date(accessExpiry).toISOString() : null;
+    await supabase.rpc('admin_set_access_mode', {
+      p_target_user_id: userId,
+      p_mode: accessMode,
+      p_expires_at: expiresAt,
+    });
+    toast.success('Access mode updated');
+    setEditingAccess(null);
+    loadData();
+  };
+
   if (loading || checking) return <div className="min-h-screen flex items-center justify-center"><div className="spinner" /></div>;
   if (!user) { navigate('/auth'); return null; }
   if (!isAdmin) return (
@@ -138,6 +155,15 @@ const Admin = () => {
   const totalExports = exports.length;
   const blockedUsers = profiles.filter(p => p.is_blocked).length;
   const blockedDevices = devices.filter(d => d.is_blocked).length;
+
+  const accessModeLabel = (mode: string) => {
+    switch (mode) {
+      case 'exports': return { label: 'By Exports', icon: <Hash className="h-3 w-3" />, color: 'secondary' as const };
+      case 'days': return { label: 'By Days', icon: <Calendar className="h-3 w-3" />, color: 'default' as const };
+      case 'both': return { label: 'Both', icon: <Clock className="h-3 w-3" />, color: 'outline' as const };
+      default: return { label: mode, icon: null, color: 'secondary' as const };
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
@@ -198,48 +224,95 @@ const Admin = () => {
                       <th className="p-2 text-left border border-border text-xs">Name</th>
                       <th className="p-2 text-left border border-border text-xs">User ID</th>
                       <th className="p-2 text-left border border-border text-xs">Phone</th>
+                      <th className="p-2 text-center border border-border text-xs">Access Mode</th>
                       <th className="p-2 text-center border border-border text-xs">Max Exports</th>
+                      <th className="p-2 text-center border border-border text-xs">Expires</th>
                       <th className="p-2 text-center border border-border text-xs">Status</th>
                       <th className="p-2 text-center border border-border text-xs">Joined</th>
                       <th className="p-2 text-center border border-border text-xs">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {profiles.map(p => (
-                      <tr key={p.id} className="hover:bg-muted/50">
-                        <td className="p-2 border border-border font-medium">{p.full_name || '—'}</td>
-                        <td className="p-2 border border-border text-xs font-mono text-muted-foreground">{p.user_id.slice(0, 8)}...</td>
-                        <td className="p-2 border border-border text-xs">{p.phone || '—'}</td>
-                        <td className="p-2 border border-border text-center">
-                          {editingMax === p.user_id ? (
-                            <div className="flex items-center gap-1 justify-center">
-                              <Input type="number" value={maxVal} onChange={e => setMaxVal(e.target.value)} className="w-16 h-7 text-xs" />
-                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => updateMaxExports(p.user_id)}>✓</Button>
-                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setEditingMax(null)}>✕</Button>
-                            </div>
-                          ) : (
-                            <span className="cursor-pointer hover:underline" onClick={() => { setEditingMax(p.user_id); setMaxVal(String(p.max_exports)); }}>
-                              {p.max_exports}
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-2 border border-border text-center">
-                          <Badge variant={p.is_blocked ? 'destructive' : 'secondary'}>
-                            {p.is_blocked ? 'Blocked' : 'Active'}
-                          </Badge>
-                        </td>
-                        <td className="p-2 border border-border text-center text-xs text-muted-foreground">
-                          {new Date(p.created_at).toLocaleDateString()}
-                        </td>
-                        <td className="p-2 border border-border text-center">
-                          <Button size="sm" variant={p.is_blocked ? 'outline' : 'destructive'} className="h-7 text-xs" onClick={() => toggleUserBlock(p.user_id, p.is_blocked)}>
-                            {p.is_blocked ? <><CheckCircle className="h-3 w-3 mr-1" /> Unblock</> : <><Ban className="h-3 w-3 mr-1" /> Block</>}
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
+                    {profiles.map(p => {
+                      const modeInfo = accessModeLabel(p.access_mode || 'exports');
+                      return (
+                        <tr key={p.id} className="hover:bg-muted/50">
+                          <td className="p-2 border border-border font-medium">{p.full_name || '—'}</td>
+                          <td className="p-2 border border-border text-xs font-mono text-muted-foreground">{p.user_id.slice(0, 8)}...</td>
+                          <td className="p-2 border border-border text-xs">{p.phone || '—'}</td>
+                          <td className="p-2 border border-border text-center">
+                            {editingAccess === p.user_id ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <select
+                                  value={accessMode}
+                                  onChange={e => setAccessMode(e.target.value)}
+                                  className="text-xs border border-border rounded px-1 py-0.5 bg-background"
+                                >
+                                  <option value="exports">By Exports</option>
+                                  <option value="days">By Days</option>
+                                  <option value="both">Both</option>
+                                </select>
+                                {(accessMode === 'days' || accessMode === 'both') && (
+                                  <Input
+                                    type="datetime-local"
+                                    value={accessExpiry}
+                                    onChange={e => setAccessExpiry(e.target.value)}
+                                    className="w-40 h-7 text-xs"
+                                  />
+                                )}
+                                <div className="flex gap-1">
+                                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => updateAccessMode(p.user_id)}>✓</Button>
+                                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setEditingAccess(null)}>✕</Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <Badge
+                                variant={modeInfo.color}
+                                className="cursor-pointer gap-1"
+                                onClick={() => {
+                                  setEditingAccess(p.user_id);
+                                  setAccessMode(p.access_mode || 'exports');
+                                  setAccessExpiry(p.access_expires_at ? new Date(p.access_expires_at).toISOString().slice(0, 16) : '');
+                                }}
+                              >
+                                {modeInfo.icon} {modeInfo.label}
+                              </Badge>
+                            )}
+                          </td>
+                          <td className="p-2 border border-border text-center">
+                            {editingMax === p.user_id ? (
+                              <div className="flex items-center gap-1 justify-center">
+                                <Input type="number" value={maxVal} onChange={e => setMaxVal(e.target.value)} className="w-16 h-7 text-xs" />
+                                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => updateMaxExports(p.user_id)}>✓</Button>
+                                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setEditingMax(null)}>✕</Button>
+                              </div>
+                            ) : (
+                              <span className="cursor-pointer hover:underline" onClick={() => { setEditingMax(p.user_id); setMaxVal(String(p.max_exports)); }}>
+                                {p.max_exports}
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-2 border border-border text-center text-xs text-muted-foreground">
+                            {p.access_expires_at ? new Date(p.access_expires_at).toLocaleDateString() : '—'}
+                          </td>
+                          <td className="p-2 border border-border text-center">
+                            <Badge variant={p.is_blocked ? 'destructive' : 'secondary'}>
+                              {p.is_blocked ? 'Blocked' : 'Active'}
+                            </Badge>
+                          </td>
+                          <td className="p-2 border border-border text-center text-xs text-muted-foreground">
+                            {new Date(p.created_at).toLocaleDateString()}
+                          </td>
+                          <td className="p-2 border border-border text-center">
+                            <Button size="sm" variant={p.is_blocked ? 'outline' : 'destructive'} className="h-7 text-xs" onClick={() => toggleUserBlock(p.user_id, p.is_blocked)}>
+                              {p.is_blocked ? <><CheckCircle className="h-3 w-3 mr-1" /> Unblock</> : <><Ban className="h-3 w-3 mr-1" /> Block</>}
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {profiles.length === 0 && (
-                      <tr><td colSpan={7} className="p-8 text-center text-muted-foreground border border-border">No users yet</td></tr>
+                      <tr><td colSpan={9} className="p-8 text-center text-muted-foreground border border-border">No users yet</td></tr>
                     )}
                   </tbody>
                 </table>

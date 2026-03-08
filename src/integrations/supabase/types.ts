@@ -79,6 +79,8 @@ export type Database = {
       }
       profiles: {
         Row: {
+          access_expires_at: string | null
+          access_mode: string
           created_at: string
           full_name: string | null
           id: string
@@ -89,6 +91,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          access_expires_at?: string | null
+          access_mode?: string
           created_at?: string
           full_name?: string | null
           id?: string
@@ -99,6 +103,8 @@ export type Database = {
           user_id: string
         }
         Update: {
+          access_expires_at?: string | null
+          access_mode?: string
           created_at?: string
           full_name?: string | null
           id?: string
@@ -173,6 +179,8 @@ export type Database = {
       admin_get_all_profiles: {
         Args: never
         Returns: {
+          access_expires_at: string | null
+          access_mode: string
           created_at: string
           full_name: string | null
           id: string
@@ -188,6 +196,14 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      admin_set_access_mode: {
+        Args: {
+          p_expires_at?: string
+          p_mode: string
+          p_target_user_id: string
+        }
+        Returns: undefined
       }
       admin_set_device_blocked: {
         Args: { p_blocked: boolean; p_fingerprint: string }

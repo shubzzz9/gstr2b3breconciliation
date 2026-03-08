@@ -8,14 +8,14 @@ const Navbar = () => {
 
   return (
     <>
-      <nav className="sticky top-0 z-40 bg-card/95 backdrop-blur-sm border-b border-border">
-        <div className="max-w-[1100px] mx-auto px-4 py-3 flex items-center justify-between">
+      <nav className="sticky top-0 z-40 bg-card/95 backdrop-blur-sm border-b border-border shadow-sm">
+        <div className="max-w-[1100px] mx-auto px-4 py-4 flex items-center justify-between">
           {/* Brand */}
-          <div className="flex items-center gap-2.5">
-            <span className="text-xl">🧾</span>
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">🧾</span>
             <div>
-              <p className="text-[10px] text-muted-foreground leading-tight font-medium">TechBharat Studios presents</p>
-              <h1 className="text-sm font-bold text-primary leading-tight">GST Reconciliation & Audit Tool</h1>
+              <p className="text-xs text-muted-foreground leading-tight font-semibold tracking-wide uppercase">TechBharat Studios</p>
+              <h1 className="text-base sm:text-lg font-bold text-primary leading-tight">GST Reconciliation & Audit Tool</h1>
             </div>
           </div>
 

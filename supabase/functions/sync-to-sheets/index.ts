@@ -34,7 +34,7 @@ async function getAccessToken(clientEmail: string, privateKey: string): Promise<
   const unsignedToken = `${header}.${claim}`;
 
   // Import private key
-  const pemContents = sa.private_key
+  const pemContents = cleanKey
     .replace(/-----BEGIN PRIVATE KEY-----/, "")
     .replace(/-----END PRIVATE KEY-----/, "")
     .replace(/\n/g, "");

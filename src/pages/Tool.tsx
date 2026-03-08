@@ -10,6 +10,8 @@ import { TALLY_SINGLE_ROWS, TALLY_MULTI_ROWS } from '@/lib/gst-helpers';
 import { generateFingerprint } from '@/lib/fingerprint';
 import ContactPaywall from '@/components/ContactPaywall';
 import AuthModal from '@/components/AuthModal';
+import Navbar from '@/components/Navbar';
+import Footer from '@/components/Footer';
 
 type Mode = 'tally' | 'full' | 'combined' | 'prtally' | null;
 

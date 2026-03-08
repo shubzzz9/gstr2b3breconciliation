@@ -14,8 +14,8 @@ const Navbar = () => {
           <div className="flex items-center gap-2.5">
             <span className="text-xl">🧾</span>
             <div>
-              <h1 className="text-sm font-bold text-primary leading-tight">GST Reconciliation Tool</h1>
-              <p className="text-[10px] text-muted-foreground leading-tight">by TechBharat Studios</p>
+              <p className="text-[10px] text-muted-foreground leading-tight font-medium">TechBharat Studios presents</p>
+              <h1 className="text-sm font-bold text-primary leading-tight">GST Reconciliation & Audit Tool</h1>
             </div>
           </div>
 

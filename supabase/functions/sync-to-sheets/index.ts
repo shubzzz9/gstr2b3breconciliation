@@ -134,20 +134,12 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  try {
-    const serviceAccountKeyRaw = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_KEY");
-    if (!serviceAccountKeyRaw) throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY not set");
+   try {
+    const clientEmail = Deno.env.get("GOOGLE_CLIENT_EMAIL");
+    if (!clientEmail) throw new Error("GOOGLE_CLIENT_EMAIL not set");
 
-    // Handle potential double-encoding of the JSON secret
-    let serviceAccountKey = serviceAccountKeyRaw;
-    // If the string starts with a quote, it may be double-JSON-encoded
-    if (serviceAccountKey.startsWith('"') || serviceAccountKey.startsWith("'")) {
-      try {
-        serviceAccountKey = JSON.parse(serviceAccountKey);
-      } catch {
-        // not double encoded, use as-is
-      }
-    }
+    const privateKey = Deno.env.get("GOOGLE_PRIVATE_KEY");
+    if (!privateKey) throw new Error("GOOGLE_PRIVATE_KEY not set");
 
     const sheetId = Deno.env.get("GOOGLE_SHEET_ID");
     if (!sheetId) throw new Error("GOOGLE_SHEET_ID not set");
@@ -157,9 +149,7 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log("Attempting to get access token...");
-    console.log("Service account key starts with:", serviceAccountKey.substring(0, 20));
-    const accessToken = await getAccessToken(serviceAccountKey);
+    const accessToken = await getAccessToken(clientEmail, privateKey);
 
     // Fetch profiles (signups)
     const { data: profiles, error: profilesErr } = await supabase

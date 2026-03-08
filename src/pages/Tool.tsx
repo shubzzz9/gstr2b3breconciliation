@@ -14,8 +14,8 @@ type Mode = 'tally' | 'full' | 'combined' | 'prtally' | null;
 
 const Tool = () => {
   const { user, loading, signOut } = useAuth();
-  const navigate = useNavigate();
   const [step, setStep] = useState(1);
+  const [mode, setMode] = useState<Mode>(null);
   const [mode, setMode] = useState<Mode>(null);
   const [error, setError] = useState('');
 

@@ -9,13 +9,13 @@ const Navbar = () => {
   return (
     <>
       <nav className="sticky top-0 z-40 bg-card/95 backdrop-blur-sm border-b border-border shadow-sm">
-        <div className="max-w-[1100px] mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-[1100px] mx-auto px-4 py-4 sm:py-5 flex items-center justify-between">
           {/* Brand */}
           <div className="flex items-center gap-3">
-            <span className="text-3xl">🧾</span>
+            <span className="text-4xl sm:text-5xl leading-none">🧾</span>
             <div>
-              <p className="text-xs text-muted-foreground leading-tight font-semibold tracking-wide uppercase">TechBharat Studios</p>
-              <h1 className="text-base sm:text-lg font-bold text-primary leading-tight">GST Reconciliation & Audit Tool</h1>
+              <p className="text-sm sm:text-base font-bold tracking-widest uppercase text-muted-foreground" style={{ fontFamily: "'Courier New', Courier, monospace" }}>TechBharat Studios</p>
+              <h1 className="text-base sm:text-xl font-extrabold text-primary leading-tight">GST Reconciliation & Audit Tool</h1>
             </div>
           </div>
 

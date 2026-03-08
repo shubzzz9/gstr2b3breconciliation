@@ -2,38 +2,19 @@ const Footer = () => {
   return (
     <footer className="bg-card border-t border-border mt-8">
       <div className="max-w-[1100px] mx-auto px-4 py-8">
-        {/* Trust indicators */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="text-center p-3">
-            <div className="text-2xl mb-1">⚡</div>
-            <div className="text-sm font-bold text-foreground">Instant Results</div>
-            <div className="text-[11px] text-muted-foreground">Upload & get reconciled files in seconds</div>
-          </div>
-          <div className="text-center p-3">
-            <div className="text-2xl mb-1">🔒</div>
-            <div className="text-sm font-bold text-foreground">100% Secure</div>
-            <div className="text-[11px] text-muted-foreground">Files processed in-browser, never stored</div>
-          </div>
-          <div className="text-center p-3">
-            <div className="text-2xl mb-1">🎯</div>
-            <div className="text-sm font-bold text-foreground">Smart Matching</div>
-            <div className="text-[11px] text-muted-foreground">Auto-detects columns & reconciles intelligently</div>
-          </div>
-          <div className="text-center p-3">
-            <div className="text-2xl mb-1">🎁</div>
-            <div className="text-sm font-bold text-foreground">10 Free Exports</div>
-            <div className="text-[11px] text-muted-foreground">Try the full tool free before committing</div>
-          </div>
+        {/* Trust indicators - moved to top as a compact banner */}
+        <div className="flex flex-wrap justify-center gap-4 sm:gap-8 mb-6 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1">⚡ Instant Results</span>
+          <span className="flex items-center gap-1">🔒 100% Secure — processed in-browser</span>
+          <span className="flex items-center gap-1">🎯 Smart Matching</span>
+          <span className="flex items-center gap-1">🎁 10 Free Exports</span>
         </div>
 
         <div className="border-t border-border pt-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             {/* Brand */}
             <div className="text-center md:text-left">
-              <div className="text-sm font-bold text-foreground">
-                🧾 GST Reconciliation Tool
-              </div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">
+              <div className="text-xs text-muted-foreground mt-0.5">
                 Built by <span className="font-semibold text-warning">TechBharat Studios</span>
               </div>
             </div>

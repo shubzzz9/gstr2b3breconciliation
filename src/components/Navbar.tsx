@@ -18,8 +18,6 @@ const Navbar = () => {
               <h1 className="text-base sm:text-xl font-extrabold text-primary leading-tight">GST Reconciliation & Audit Tool</h1>
             </div>
           </div>
-            </div>
-          </div>
 
           {/* Auth section */}
           <div className="flex items-center gap-3">

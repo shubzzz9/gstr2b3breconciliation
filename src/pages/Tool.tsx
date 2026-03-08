@@ -497,6 +497,9 @@ const Tool = () => {
       </div>
       </main>
 
+      {/* Mid-page Ad Banner */}
+      <AdBanner slot="MID_AD_SLOT" className="py-3 bg-background" />
+
       {/* SEO Content Section - visible to search engines, helpful for users */}
       <section className="bg-secondary border-t border-border">
         <div className="max-w-[1100px] mx-auto px-4 py-8">

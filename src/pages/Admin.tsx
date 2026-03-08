@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { Shield, Users, FileDown, Fingerprint, Ban, CheckCircle, ArrowLeft } from 'lucide-react';
+import { Shield, Users, FileDown, Fingerprint, Ban, CheckCircle, ArrowLeft, RefreshCw } from 'lucide-react';
 
 type Profile = {
   id: string;
@@ -52,6 +52,24 @@ const Admin = () => {
   const [devices, setDevices] = useState<Device[]>([]);
   const [editingMax, setEditingMax] = useState<string | null>(null);
   const [maxVal, setMaxVal] = useState('');
+  const [syncing, setSyncing] = useState(false);
+
+  const syncToSheets = async () => {
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-to-sheets');
+      if (error) throw error;
+      if (data?.success) {
+        toast.success(`Synced ${data.synced.signups} users & ${data.synced.exports} exports to Google Sheets`);
+      } else {
+        throw new Error(data?.error || 'Sync failed');
+      }
+    } catch (err: any) {
+      toast.error(`Sync failed: ${err.message}`);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const checkAdmin = useCallback(async () => {
     if (!user) return;
@@ -130,9 +148,14 @@ const Admin = () => {
               <p className="text-xs opacity-80">Manage users, exports, and devices</p>
             </div>
           </div>
-          <Button variant="ghost" className="text-primary-foreground hover:bg-white/20" onClick={() => navigate('/')}>
-            <ArrowLeft className="h-4 w-4 mr-2" /> Back to Tool
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" className="text-primary-foreground hover:bg-white/20" onClick={syncToSheets} disabled={syncing}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} /> {syncing ? 'Syncing…' : 'Sync to Sheets'}
+            </Button>
+            <Button variant="ghost" className="text-primary-foreground hover:bg-white/20" onClick={() => navigate('/')}>
+              <ArrowLeft className="h-4 w-4 mr-2" /> Back to Tool
+            </Button>
+          </div>
         </div>
 
         <div className="bg-card rounded-b-xl p-5 md:p-8 shadow-lg border border-border border-t-0">

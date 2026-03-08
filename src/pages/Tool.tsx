@@ -84,21 +84,24 @@ const Tool = () => {
 
   const handleAuthSuccess = async () => {
     setShowAuthModal(false);
-    await loadUsage();
-    if (pendingDownload) {
-      const { type, fn } = pendingDownload;
-      setPendingDownload(null);
-      // Re-check after login
-      const { data: canExport } = await supabase.rpc('can_user_export', { p_user_id: pendingDownload.type === type ? (await supabase.auth.getUser()).data.user!.id : '' });
-      if (canExport) {
-        const userId = (await supabase.auth.getUser()).data.user!.id;
-        await supabase.from('export_logs').insert({ user_id: userId, export_type: type });
-        setExportCount(prev => prev + 1);
-        fn();
-      } else {
-        setShowPaywall(true);
-      }
+    // After login, reload usage and retry the pending download
+    const { data: { user: freshUser } } = await supabase.auth.getUser();
+    if (!freshUser || !pendingDownload) { setPendingDownload(null); return; }
+    // Reload usage
+    const { data: count } = await supabase.rpc('get_export_count', { p_user_id: freshUser.id });
+    setExportCount(count || 0);
+    const { data: profile } = await supabase.from('profiles').select('max_exports, is_blocked').eq('user_id', freshUser.id).single();
+    if (profile) { setMaxExports(profile.max_exports); }
+    // Try export
+    const { data: canExport } = await supabase.rpc('can_user_export', { p_user_id: freshUser.id });
+    if (canExport) {
+      await supabase.from('export_logs').insert({ user_id: freshUser.id, export_type: pendingDownload.type });
+      setExportCount(prev => prev + 1);
+      pendingDownload.fn();
+    } else {
+      setShowPaywall(true);
     }
+    setPendingDownload(null);
   };
 
   const handleFile = (file: File, setter: (wb: any) => void, nameSetter: (n: string) => void) => {

@@ -453,7 +453,7 @@ const Tool = () => {
                     <span className="text-[10px] font-semibold bg-secondary text-foreground px-2 py-0.5 rounded-full">File 3</span>
                     <h4 className="text-sm font-bold mt-2">🔍 Mismatch Diagnosis</h4>
                     <p className="text-xs text-muted-foreground mb-3">Detailed mismatch analysis.</p>
-                    <button onClick={() => handleDownload('file3', () => downloadFile3(diagData))} className="btn-tool bg-secondary text-foreground border border-border hover:bg-muted">💾 Download</button>
+                    <button onClick={() => handleDownload('file3', () => downloadFile3(diagData, recoRows || [], (recoRows as any)?._possibleMatchPairs || []))} className="btn-tool bg-secondary text-foreground border border-border hover:bg-muted">💾 Download</button>
                   </div>
                 )}
                 {mode === 'prtally' && auditResult && (

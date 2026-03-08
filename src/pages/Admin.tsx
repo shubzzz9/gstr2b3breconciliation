@@ -148,9 +148,14 @@ const Admin = () => {
               <p className="text-xs opacity-80">Manage users, exports, and devices</p>
             </div>
           </div>
-          <Button variant="ghost" className="text-primary-foreground hover:bg-white/20" onClick={() => navigate('/')}>
-            <ArrowLeft className="h-4 w-4 mr-2" /> Back to Tool
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" className="text-primary-foreground hover:bg-white/20" onClick={syncToSheets} disabled={syncing}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} /> {syncing ? 'Syncing…' : 'Sync to Sheets'}
+            </Button>
+            <Button variant="ghost" className="text-primary-foreground hover:bg-white/20" onClick={() => navigate('/')}>
+              <ArrowLeft className="h-4 w-4 mr-2" /> Back to Tool
+            </Button>
+          </div>
         </div>
 
         <div className="bg-card rounded-b-xl p-5 md:p-8 shadow-lg border border-border border-t-0">

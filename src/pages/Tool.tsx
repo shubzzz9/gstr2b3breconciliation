@@ -12,6 +12,7 @@ import ContactPaywall from '@/components/ContactPaywall';
 import AuthModal from '@/components/AuthModal';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import AdBanner from '@/components/AdBanner';
 
 type Mode = 'tally' | 'full' | 'combined' | 'prtally' | null;
 

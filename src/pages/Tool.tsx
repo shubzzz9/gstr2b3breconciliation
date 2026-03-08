@@ -476,6 +476,7 @@ const Tool = () => {
       </div>
 
       {showPaywall && <ContactPaywall onClose={() => setShowPaywall(false)} exportCount={exportCount} maxExports={maxExports} />}
+      {showAuthModal && <AuthModal onClose={() => { setShowAuthModal(false); setPendingDownload(null); }} onSuccess={handleAuthSuccess} />}
     </div>
   );
 };

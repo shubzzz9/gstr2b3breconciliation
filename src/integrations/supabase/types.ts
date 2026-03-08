@@ -14,13 +14,67 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      export_logs: {
+        Row: {
+          created_at: string
+          export_type: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          export_type: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          export_type?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          full_name: string | null
+          id: string
+          is_blocked: boolean
+          max_exports: number
+          phone: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          is_blocked?: boolean
+          max_exports?: number
+          phone?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          is_blocked?: boolean
+          max_exports?: number
+          phone?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      can_user_export: { Args: { p_user_id: string }; Returns: boolean }
+      get_export_count: { Args: { p_user_id: string }; Returns: number }
     }
     Enums: {
       [_ in never]: never

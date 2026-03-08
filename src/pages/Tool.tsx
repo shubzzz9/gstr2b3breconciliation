@@ -493,6 +493,36 @@ const Tool = () => {
         </div>
       </div>
       </main>
+
+      {/* SEO Content Section - visible to search engines, helpful for users */}
+      <section className="bg-secondary border-t border-border">
+        <div className="max-w-[1100px] mx-auto px-4 py-8">
+          <h2 className="text-lg font-bold text-foreground mb-4">Free Online GSTR-2B Reconciliation Tool</h2>
+          <div className="prose prose-sm text-muted-foreground max-w-none">
+            <p className="mb-3">
+              Struggling to match your <strong>Tally purchase data with GSTR-2B</strong>? Our free online tool instantly reconciles your books with the government's GSTR-2B data. No software installation needed — everything works in your browser.
+            </p>
+            <h3 className="text-sm font-semibold text-foreground mt-4 mb-2">What This Tool Does</h3>
+            <ul className="list-disc pl-5 space-y-1 text-xs">
+              <li><strong>GSTR-2B vs Tally Reconciliation</strong> — Match your purchase register with GSTR-2B invoices</li>
+              <li><strong>Auto Column Detection</strong> — Works with any Excel format, no manual mapping needed</li>
+              <li><strong>Smart Invoice Matching</strong> — Matches by GSTIN + Invoice Number, handles typos</li>
+              <li><strong>Mismatch Diagnosis</strong> — Tells you WHY invoices don't match with actionable fixes</li>
+              <li><strong>ITC Risk Report</strong> — Identifies invoices not in GSTR-2B (ITC at risk)</li>
+              <li><strong>Styled Excel Output</strong> — Professional color-coded reports ready for clients</li>
+            </ul>
+            <h3 className="text-sm font-semibold text-foreground mt-4 mb-2">Who Uses This Tool?</h3>
+            <p className="text-xs">
+              <strong>Chartered Accountants (CAs)</strong>, <strong>tax professionals</strong>, <strong>GST practitioners</strong>, and <strong>businesses</strong> across India use this tool to save hours of manual reconciliation work. Perfect for quarterly GST filing, annual audits, and ITC verification.
+            </p>
+            <h3 className="text-sm font-semibold text-foreground mt-4 mb-2">100% Secure</h3>
+            <p className="text-xs">
+              All file processing happens <strong>locally in your browser</strong>. Your Excel files are never uploaded to any server. Your sensitive GSTIN data, invoice details, and financial information stay on your device.
+            </p>
+          </div>
+        </div>
+      </section>
+
       <Footer />
 
       {showPaywall && <ContactPaywall onClose={() => setShowPaywall(false)} exportCount={exportCount} maxExports={maxExports} />}

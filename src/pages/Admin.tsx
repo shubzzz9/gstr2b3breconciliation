@@ -52,6 +52,24 @@ const Admin = () => {
   const [devices, setDevices] = useState<Device[]>([]);
   const [editingMax, setEditingMax] = useState<string | null>(null);
   const [maxVal, setMaxVal] = useState('');
+  const [syncing, setSyncing] = useState(false);
+
+  const syncToSheets = async () => {
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-to-sheets');
+      if (error) throw error;
+      if (data?.success) {
+        toast.success(`Synced ${data.synced.signups} users & ${data.synced.exports} exports to Google Sheets`);
+      } else {
+        throw new Error(data?.error || 'Sync failed');
+      }
+    } catch (err: any) {
+      toast.error(`Sync failed: ${err.message}`);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const checkAdmin = useCallback(async () => {
     if (!user) return;

@@ -529,6 +529,9 @@ const Tool = () => {
         </div>
       </section>
 
+      {/* Bottom Ad Banner */}
+      <AdBanner slot="BOTTOM_AD_SLOT" className="py-3 bg-secondary border-t border-border" />
+
       <Footer />
 
       {showPaywall && <ContactPaywall onClose={() => setShowPaywall(false)} exportCount={exportCount} maxExports={maxExports} />}

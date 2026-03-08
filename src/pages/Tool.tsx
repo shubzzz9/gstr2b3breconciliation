@@ -12,6 +12,7 @@ import ContactPaywall from '@/components/ContactPaywall';
 import AuthModal from '@/components/AuthModal';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import AdBanner from '@/components/AdBanner';
 
 type Mode = 'tally' | 'full' | 'combined' | 'prtally' | null;
 
@@ -247,6 +248,8 @@ const Tool = () => {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
+      {/* Top Ad Banner */}
+      <AdBanner slot="TOP_AD_SLOT" className="py-2 bg-secondary" />
       <main className="flex-1 p-4 md:p-6">
       <div className="max-w-[1100px] mx-auto">
         {/* Tool Header */}
@@ -494,6 +497,9 @@ const Tool = () => {
       </div>
       </main>
 
+      {/* Mid-page Ad Banner */}
+      <AdBanner slot="MID_AD_SLOT" className="py-3 bg-background" />
+
       {/* SEO Content Section - visible to search engines, helpful for users */}
       <section className="bg-secondary border-t border-border">
         <div className="max-w-[1100px] mx-auto px-4 py-8">
@@ -522,6 +528,9 @@ const Tool = () => {
           </div>
         </div>
       </section>
+
+      {/* Bottom Ad Banner */}
+      <AdBanner slot="BOTTOM_AD_SLOT" className="py-3 bg-secondary border-t border-border" />
 
       <Footer />
 

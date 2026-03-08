@@ -13,7 +13,17 @@ interface GoogleTokenResponse {
 }
 
 async function getAccessToken(serviceAccountKey: string): Promise<string> {
-  const sa = JSON.parse(serviceAccountKey);
+  // Try to clean up the key - handle potential encoding issues
+  let keyStr = serviceAccountKey.trim();
+  // Remove potential wrapping quotes
+  if ((keyStr.startsWith('"') && keyStr.endsWith('"')) || (keyStr.startsWith("'") && keyStr.endsWith("'"))) {
+    keyStr = keyStr.slice(1, -1);
+  }
+  // Unescape if double-escaped
+  keyStr = keyStr.replace(/\\n/g, '\n').replace(/\\"/g, '"');
+  
+  console.log("Key starts with:", keyStr.substring(0, 5), "length:", keyStr.length);
+  const sa = JSON.parse(keyStr);
   const now = Math.floor(Date.now() / 1000);
 
   const header = btoa(JSON.stringify({ alg: "RS256", typ: "JWT" }));
@@ -131,8 +141,19 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const serviceAccountKey = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_KEY");
-    if (!serviceAccountKey) throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY not set");
+    const serviceAccountKeyRaw = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_KEY");
+    if (!serviceAccountKeyRaw) throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY not set");
+
+    // Handle potential double-encoding of the JSON secret
+    let serviceAccountKey = serviceAccountKeyRaw;
+    // If the string starts with a quote, it may be double-JSON-encoded
+    if (serviceAccountKey.startsWith('"') || serviceAccountKey.startsWith("'")) {
+      try {
+        serviceAccountKey = JSON.parse(serviceAccountKey);
+      } catch {
+        // not double encoded, use as-is
+      }
+    }
 
     const sheetId = Deno.env.get("GOOGLE_SHEET_ID");
     if (!sheetId) throw new Error("GOOGLE_SHEET_ID not set");
@@ -142,6 +163,8 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    console.log("Attempting to get access token...");
+    console.log("Service account key starts with:", serviceAccountKey.substring(0, 20));
     const accessToken = await getAccessToken(serviceAccountKey);
 
     // Fetch profiles (signups)

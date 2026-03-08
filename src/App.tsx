@@ -16,9 +16,9 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Navigate to="/auth" replace />} />
+          <Route path="/" element={<Tool />} />
           <Route path="/auth" element={<Auth />} />
-          <Route path="/tool" element={<Tool />} />
+          <Route path="/tool" element={<Navigate to="/" replace />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

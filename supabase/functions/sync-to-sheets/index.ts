@@ -129,7 +129,7 @@ async function writeToSheet(
   values: string[][]
 ) {
   const range = `${sheetTitle}!A1`;
-  await fetch(
+  const writeRes = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
     {
       method: "PUT",
@@ -140,6 +140,12 @@ async function writeToSheet(
       body: JSON.stringify({ values }),
     }
   );
+  const writeData = await writeRes.json();
+  if (!writeRes.ok) {
+    console.error("writeToSheet failed:", JSON.stringify(writeData));
+    throw new Error(`Failed to write to sheet ${sheetTitle}: ${JSON.stringify(writeData)}`);
+  }
+  console.log(`Wrote ${values.length} rows to ${sheetTitle}:`, JSON.stringify(writeData));
 }
 
 Deno.serve(async (req) => {

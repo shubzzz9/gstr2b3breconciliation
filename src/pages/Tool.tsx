@@ -6,7 +6,7 @@ import XLSX from 'xlsx-js-style';
 import { scanTally, processTally, scanGSTR2B, parseGSTR2B, parseCombined, parsePurchaseRegister, parseTally4 } from '@/lib/gst-parsers';
 import { reconcile, diagnoseMismatches, reconcilePRTally } from '@/lib/gst-reconcile';
 import { downloadFile1, downloadFile2, downloadFile3, downloadPRTallyAudit } from '@/lib/gst-downloads';
-import { TALLY_SINGLE_ROWS, TALLY_MULTI_ROWS } from '@/lib/gst-helpers';
+import { TALLY_SINGLE_ROWS, TALLY_MULTI_ROWS, GSTR_STD_COLS } from '@/lib/gst-helpers';
 import { generateFingerprint } from '@/lib/fingerprint';
 import ContactPaywall from '@/components/ContactPaywall';
 import AuthModal from '@/components/AuthModal';
@@ -41,6 +41,7 @@ const Tool = () => {
   // Mappings
   const [singleMap, setSingleMap] = useState<Record<string, number>>({});
   const [multiMap, setMultiMap] = useState<Record<string, number[]>>({});
+  const [gstrDetected, setGstrDetected] = useState<Record<string, string | null>>({});
 
   // Results
   const [tallyData, setTallyData] = useState<any>(null);
@@ -178,6 +179,7 @@ const Tool = () => {
       if (m === 'full') {
         const gScan = scanGSTR2B(gstrWB);
         setGstrScan(gScan);
+        setGstrDetected({ ...gScan.detected });
       }
       setStep(2);
     } catch (e: any) { setError(e.message); }
@@ -217,10 +219,12 @@ const Tool = () => {
       if (mode === 'full' && gstrScan) {
         setProgressLabel('Parsing GSTR-2B...');
         setProgress(50);
-        const gstrRows = parseGSTR2B(gstrScan);
+        // Use the user-edited mapping
+        const editedScan = { ...gstrScan, detected: gstrDetected };
+        const gstrRows = parseGSTR2B(editedScan);
         setProgressLabel('Reconciling...');
         setProgress(70);
-        const reco = reconcile(gstrRows, tResult.rows, gstrScan.extraCols);
+        const reco = reconcile(gstrRows, tResult.rows, editedScan.extraCols);
         setRecoRows(reco);
         setProgress(85);
         setProgressLabel('Diagnosing mismatches...');
@@ -398,9 +402,56 @@ const Tool = () => {
                   </table>
                 </div>
               )}
+
+              {/* GSTR-2B Column Mapping UI */}
+              {mode === 'full' && gstrScan && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-bold text-primary bg-secondary p-2 rounded mb-2">🏛️ GSTR-2B — Column Mapping</h3>
+                  {gstrScan.headerFallback && (
+                    <div className="alert-box alert-warn mb-3 text-xs">
+                      <strong>⚠ GSTR-2B header detected via fuzzy matching.</strong> Columns have been auto-mapped — please review and correct any wrong mappings.
+                    </div>
+                  )}
+                  <table className="map-table">
+                    <thead><tr><th>Expected Column</th><th>Mapped To</th><th>Status</th></tr></thead>
+                    <tbody>
+                      {GSTR_STD_COLS.map((expected, ei) => {
+                        const REQUIRED = new Set(['GSTIN of supplier', 'Invoice number', 'Invoice Date', 'Taxable Value (₹)']);
+                        const isRequired = REQUIRED.has(expected);
+                        const mapped = gstrDetected[expected] || '';
+                        return (
+                          <tr key={ei}>
+                            <td className="text-xs font-medium">
+                              {expected} {isRequired && <span className="text-destructive">*</span>}
+                            </td>
+                            <td>
+                              <select className="w-full p-1 border border-input rounded text-xs bg-background"
+                                value={mapped}
+                                onChange={(e) => setGstrDetected(prev => ({ ...prev, [expected]: e.target.value || null }))}>
+                                <option value="">(Not mapped)</option>
+                                {gstrScan.allHeaders.map((h: string, i: number) => <option key={i} value={h}>{h}</option>)}
+                              </select>
+                            </td>
+                            <td>
+                              {mapped ? <span className="text-xs text-success font-semibold">✓ Mapped</span>
+                                : isRequired ? <span className="text-xs text-destructive font-semibold">✗ Required</span>
+                                : <span className="text-xs text-warning font-semibold">⚠ Optional</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Sanity Warnings */}
               {mode === 'full' && gstrScan && gstrScan.sanityWarnings.length > 0 && (
                 <div className="alert-box alert-warn mb-4">
-                  {gstrScan.sanityWarnings.map((w: string, i: number) => <div key={i}>{w}</div>)}
+                  <strong>⚠ Data Sanity Warnings:</strong>
+                  <ul className="list-disc pl-5 mt-1 text-xs space-y-1">
+                    {gstrScan.sanityWarnings.map((w: string, i: number) => <li key={i}>{w}</li>)}
+                  </ul>
                 </div>
               )}
               {(mode === 'combined' || mode === 'prtally') && (
@@ -451,6 +502,35 @@ const Tool = () => {
                   })()}
                 </div>
               )}
+
+              {/* Remarks Breakdown Table */}
+              {recoRows && (() => {
+                const counts: Record<string, number> = {};
+                recoRows.forEach((r: any) => { counts[r['Remarks']] = (counts[r['Remarks']] || 0) + 1; });
+                const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+                return (
+                  <div className="mb-6">
+                    <h3 className="text-sm font-bold text-primary mb-2">Remarks Breakdown</h3>
+                    <table className="w-full border-collapse text-sm mb-4">
+                      <thead>
+                        <tr>
+                          <th className="bg-secondary p-2 text-left border border-border font-semibold">Remark</th>
+                          <th className="bg-secondary p-2 text-right border border-border font-semibold">Count</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sorted.map(([remark, count], i) => (
+                          <tr key={i}>
+                            <td className="p-2 border border-border text-xs">{remark}</td>
+                            <td className="p-2 border border-border text-xs text-right">{count}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <hr className="border-border mb-4" />
+                  </div>
+                );
+              })()}
 
               <h3 className="text-sm font-bold text-primary mb-3">Download Files</h3>
               <div className="flex flex-wrap gap-4">

@@ -503,6 +503,35 @@ const Tool = () => {
                 </div>
               )}
 
+              {/* Remarks Breakdown Table */}
+              {recoRows && (() => {
+                const counts: Record<string, number> = {};
+                recoRows.forEach((r: any) => { counts[r['Remarks']] = (counts[r['Remarks']] || 0) + 1; });
+                const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+                return (
+                  <div className="mb-6">
+                    <h3 className="text-sm font-bold text-primary mb-2">Remarks Breakdown</h3>
+                    <table className="w-full border-collapse text-sm mb-4">
+                      <thead>
+                        <tr>
+                          <th className="bg-secondary p-2 text-left border border-border font-semibold">Remark</th>
+                          <th className="bg-secondary p-2 text-right border border-border font-semibold">Count</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sorted.map(([remark, count], i) => (
+                          <tr key={i}>
+                            <td className="p-2 border border-border text-xs">{remark}</td>
+                            <td className="p-2 border border-border text-xs text-right">{count}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <hr className="border-border mb-4" />
+                  </div>
+                );
+              })()}
+
               <h3 className="text-sm font-bold text-primary mb-3">Download Files</h3>
               <div className="flex flex-wrap gap-4">
                 {(mode === 'tally' || mode === 'full' || mode === 'combined') && tallyData && (

@@ -179,6 +179,7 @@ const Tool = () => {
       if (m === 'full') {
         const gScan = scanGSTR2B(gstrWB);
         setGstrScan(gScan);
+        setGstrDetected({ ...gScan.detected });
       }
       setStep(2);
     } catch (e: any) { setError(e.message); }

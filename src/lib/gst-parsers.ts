@@ -415,6 +415,8 @@ export function parsePurchaseRegister(wb: any) {
   hdrs.forEach((h: string, idx: number) => {
     if (h.includes('bill') && h.includes('no')) ci['Bill.No'] = idx;
     if (h.includes('bill') && h.includes('date')) ci['Bill Date'] = idx;
+    if (h.includes('vou') && h.includes('date')) ci['Vou Date'] = idx;
+    if (h === 'vou.no.' || h === 'vou no') ci['Vou.No.'] = idx;
     if (h.includes('party')) ci['Party Name'] = idx;
     if (h.includes('gst') && h.includes('no')) ci['GST No'] = idx;
     if (h === 'gst amt 0') ci['GST AMT 0'] = idx;
@@ -427,10 +429,16 @@ export function parsePurchaseRegister(wb: any) {
     if (h === 'amt 18%') ci['Amt 18%'] = idx;
     if (h === 'sgst 9%') ci['Sgst 9%'] = idx;
     if (h === 'cgst 9%') ci['Cgst 9%'] = idx;
+    if (h === 'amt 28%') ci['Amt 28%'] = idx;
     if (h === 'amount 5%') ci['Amount 5%'] = idx;
     if (h === 'igst 5%') ci['Igst 5%'] = idx;
     if (h === 'amount 12%') ci['Amount 12%'] = idx;
     if (h === 'igst 12%') ci['Igst 12%'] = idx;
+    if (h === 'amount 18%') ci['Amount 18%'] = idx;
+    if (h === 'igst 18%') ci['Igst 18%'] = idx;
+    if (h === 'amount 28%') ci['Amount 28%'] = idx;
+    if (h === 'igst 28%') ci['Igst 28%'] = idx;
+    if (h === 'net amt' || h === 'net amount') ci['Net Amt'] = idx;
   });
 
   const gcol = (row: any[], name: string) => {

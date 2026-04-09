@@ -223,6 +223,58 @@ export function scanGSTR2B(wb: any): GSTRScanResult {
     sanityWarnings.push(`Could not auto-detect: ${missingRequired.join(', ')}. Please map them manually.`);
   }
 
+  // Sample up to 5 data rows for plausibility checks
+  const sampleStart = dataStartIdx;
+  const sampleRows: any[][] = [];
+  for (let i = sampleStart; i < raw.length && sampleRows.length < 5; i++) {
+    const sr = raw[i];
+    if (sr && !sr.every((c: any) => c === null || c === undefined || c === '')) sampleRows.push(sr);
+  }
+
+  if (sampleRows.length === 0) {
+    sanityWarnings.push('No data rows were found after the header. The file may be empty or the header was detected on the wrong row.');
+  } else {
+    // Check GSTIN column contains GSTIN-like values
+    if (det['GSTIN of supplier']) {
+      const gstinColIdx = hdrs.indexOf(det['GSTIN of supplier']);
+      const gstinSamples = sampleRows.map(sr => String(sr[gstinColIdx] || '').trim()).filter(Boolean);
+      const GSTIN_SAMPLE_RE = /^\d{2}[A-Z0-9]{13}$/;
+      const validGSTINs = gstinSamples.filter(v => GSTIN_SAMPLE_RE.test(v));
+      if (gstinSamples.length > 0 && validGSTINs.length === 0) {
+        sanityWarnings.push(
+          `The column mapped to GSTIN of supplier contains values like "${gstinSamples[0]}" which do not look like valid GSTINs (expected 15-character format like 27AAACV0141N1ZC). This column may be mapped incorrectly.`
+        );
+      }
+    }
+    // Check Taxable Value column contains numeric values
+    if (det['Taxable Value (₹)']) {
+      const taxColIdx = hdrs.indexOf(det['Taxable Value (₹)']);
+      const taxSamples = sampleRows.map(sr => sr[taxColIdx]).filter(v => v !== null && v !== undefined && v !== '');
+      const validNums = taxSamples.filter(v => !isNaN(parseFloat(v)));
+      if (taxSamples.length > 0 && validNums.length === 0) {
+        sanityWarnings.push(
+          `The column mapped to Taxable Value contains non-numeric values like "${taxSamples[0]}". This suggests the column mapping may be wrong.`
+        );
+      }
+    }
+    // Check Invoice Date column
+    if (det['Invoice Date']) {
+      const dateColIdx = hdrs.indexOf(det['Invoice Date']);
+      const dateSamples = sampleRows.map(sr => sr[dateColIdx]).filter(v => v !== null && v !== undefined && v !== '');
+      const validDates = dateSamples.filter(v => {
+        if (typeof v === 'number' && v > 40000 && v < 50000) return true;
+        if (v instanceof Date) return true;
+        if (typeof v === 'string' && /\d{1,4}[\/-]\d{1,2}[\/-]\d{1,4}/.test(v)) return true;
+        return false;
+      });
+      if (dateSamples.length > 0 && validDates.length === 0) {
+        sanityWarnings.push(
+          `The column mapped to Invoice Date contains values like "${dateSamples[0]}" which do not look like dates. Please verify this column is correct.`
+        );
+      }
+    }
+  }
+
   return { hdrIdx: hdr1, raw, allHeaders: hdrs, detected: det, extraCols, sanityWarnings, dataStartIdx, headerFallback };
 }
 
@@ -401,6 +453,7 @@ export function parsePurchaseRegister(wb: any) {
         rawBill, billDate: excelSerialToDate(gcol(row, 'Bill Date')),
         party: String(gcol(row, 'Party Name') || '').trim(),
         gstin: String(gcol(row, 'GST No') || '').trim(),
+        vouNo: String(gcol(row, 'Vou.No.') || '').trim(),
         tax5: 0, sgst25: 0, cgst25: 0, tax12: 0, sgst6: 0, cgst6: 0,
         tax18: 0, sgst9: 0, cgst9: 0, taxfree: 0, igst5: 0, igst12: 0, igst18: 0,
       };
@@ -412,12 +465,13 @@ export function parsePurchaseRegister(wb: any) {
     b.tax12 += nv4(gcol(row, 'Amt 12%')) + nv4(gcol(row, 'Amount 12%'));
     b.sgst6 += nv4(gcol(row, 'Sgst 6%'));
     b.cgst6 += nv4(gcol(row, 'Cgst 6%'));
-    b.tax18 += nv4(gcol(row, 'Amt 18%'));
+    b.tax18 += nv4(gcol(row, 'Amt 18%')) + nv4(gcol(row, 'Amount 18%'));
     b.sgst9 += nv4(gcol(row, 'Sgst 9%'));
     b.cgst9 += nv4(gcol(row, 'Cgst 9%'));
     b.taxfree += nv4(gcol(row, 'GST AMT 0'));
     b.igst5 += nv4(gcol(row, 'Igst 5%'));
     b.igst12 += nv4(gcol(row, 'Igst 12%'));
+    b.igst18 += nv4(gcol(row, 'Igst 18%'));
   }
 
   const rawHdr = raw[hdrIdx];

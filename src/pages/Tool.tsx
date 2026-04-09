@@ -219,10 +219,12 @@ const Tool = () => {
       if (mode === 'full' && gstrScan) {
         setProgressLabel('Parsing GSTR-2B...');
         setProgress(50);
-        const gstrRows = parseGSTR2B(gstrScan);
+        // Use the user-edited mapping
+        const editedScan = { ...gstrScan, detected: gstrDetected };
+        const gstrRows = parseGSTR2B(editedScan);
         setProgressLabel('Reconciling...');
         setProgress(70);
-        const reco = reconcile(gstrRows, tResult.rows, gstrScan.extraCols);
+        const reco = reconcile(gstrRows, tResult.rows, editedScan.extraCols);
         setRecoRows(reco);
         setProgress(85);
         setProgressLabel('Diagnosing mismatches...');

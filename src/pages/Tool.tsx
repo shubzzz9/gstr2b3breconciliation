@@ -538,7 +538,10 @@ const Tool = () => {
                   <div className="file-card">
                     <span className="text-[10px] font-semibold bg-accent/20 text-accent px-2 py-0.5 rounded-full">File 1</span>
                     <h4 className="text-sm font-bold mt-2">📄 GSTR-2B Format</h4>
-                    <p className="text-xs text-muted-foreground mb-3">Your data formatted to GSTR-2B columns.</p>
+                    <p className="text-xs text-muted-foreground mb-2">Your data formatted to GSTR-2B columns.</p>
+                    <div className="text-[10px] text-muted-foreground mb-3 space-y-0.5">
+                      <div>• GSTR-2B Format — <strong>{tallyData.length}</strong> rows</div>
+                    </div>
                     <button onClick={() => handleDownload('file1', () => downloadFile1(tallyData))} className="btn-tool bg-primary text-primary-foreground hover:opacity-90">💾 Download</button>
                   </div>
                 )}
@@ -546,7 +549,11 @@ const Tool = () => {
                   <div className="file-card">
                     <span className="text-[10px] font-semibold bg-success/20 text-success px-2 py-0.5 rounded-full">File 2</span>
                     <h4 className="text-sm font-bold mt-2">📋 Reconciliation Report</h4>
-                    <p className="text-xs text-muted-foreground mb-3">Full reconciliation with remarks.</p>
+                    <p className="text-xs text-muted-foreground mb-2">Full reconciliation with remarks.</p>
+                    <div className="text-[10px] text-muted-foreground mb-3 space-y-0.5">
+                      <div>• Reconciliation Output — <strong>{recoRows.length}</strong> rows</div>
+                      <div>• Remarks Guide — <strong>7</strong> rows</div>
+                    </div>
                     <button onClick={() => handleDownload('file2', () => downloadFile2(recoRows, gstrScan?.extraCols))} className="btn-tool bg-success text-success-foreground hover:opacity-90">💾 Download</button>
                   </div>
                 )}
@@ -554,7 +561,15 @@ const Tool = () => {
                   <div className="file-card">
                     <span className="text-[10px] font-semibold bg-secondary text-foreground px-2 py-0.5 rounded-full">File 3</span>
                     <h4 className="text-sm font-bold mt-2">🔍 Mismatch Diagnosis</h4>
-                    <p className="text-xs text-muted-foreground mb-3">Detailed mismatch analysis.</p>
+                    <p className="text-xs text-muted-foreground mb-2">Detailed mismatch analysis.</p>
+                    <div className="text-[10px] text-muted-foreground mb-3 space-y-0.5">
+                      <div>• Not In Our Data — <strong>{diagData.notInOurData?.length || 0}</strong> rows</div>
+                      <div>• Not In GSTR 2B (ITC Risk) — <strong>{diagData.notInGSTR2B?.length || 0}</strong> rows</div>
+                      <div>• GSTIN Mismatches — <strong>{diagData.gstinMismatches?.length || 0}</strong> rows</div>
+                      <div>• Possible Matches — <strong>{((recoRows as any)?._possibleMatchPairs || []).length}</strong> rows</div>
+                      <div>• Fig Not Matched — <strong>{diagData.figNotMatched?.length || 0}</strong> rows</div>
+                      <div>• Summary — category totals</div>
+                    </div>
                     <button onClick={() => handleDownload('file3', () => downloadFile3(diagData, recoRows || [], (recoRows as any)?._possibleMatchPairs || []))} className="btn-tool bg-secondary text-foreground border border-border hover:bg-muted">💾 Download</button>
                   </div>
                 )}

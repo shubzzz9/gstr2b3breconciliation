@@ -151,11 +151,13 @@ export function invSimilarity(inv1: any, inv2: any): { score: number; reason: st
     const stripped2 = last2.replace(/^0+/, '');
     if (stripped1 === stripped2 && stripped1.length >= 2) return { score: 85, reason: 'Extra leading zeros in invoice number' };
   }
+  // Character-frequency similarity (matches original HTML algorithm)
+  const allChars = new Set((s1 + s2).split(''));
   let common = 0;
-  const len = Math.min(s1.length, s2.length);
-  for (let i = 0; i < len; i++) if (s1[i] === s2[i]) common++;
-  const ratio = common / Math.max(s1.length, s2.length) * 100;
-  return ratio >= 60 ? { score: Math.round(ratio), reason: 'Character similarity' } : { score: Math.round(ratio), reason: '' };
+  allChars.forEach(c => { common += Math.min((s1.split(c).length - 1), (s2.split(c).length - 1)); });
+  const ratio = 2 * common / (s1.length + s2.length) * 100;
+  if (ratio >= 70) return { score: Math.round(ratio), reason: 'Similar characters — possible typo' };
+  return { score: 0, reason: '' };
 }
 
 export function nv4(v: any): number {

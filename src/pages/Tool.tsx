@@ -597,6 +597,41 @@ const Tool = () => {
                 );
               })()}
 
+              {/* Standardiser Preview */}
+              {tallyData && tallyData.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-bold text-primary mb-2">📊 Standardised Data Preview <span className="text-xs font-normal text-muted-foreground">(first 10 rows)</span></h3>
+                  <div className="relative w-full overflow-auto border border-border rounded max-h-[300px]">
+                    <table className="w-full border-collapse text-[11px]">
+                      <thead className="sticky top-0">
+                        <tr>
+                          {['GSTIN', 'Trade Name', 'Invoice No', 'Invoice Date', 'Taxable', 'IGST', 'CGST', 'SGST', 'Cess'].map(h => (
+                            <th key={h} className="bg-secondary p-1.5 border border-border font-semibold text-left whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tallyData.slice(0, 10).map((row: any, i: number) => (
+                          <tr key={i} className="hover:bg-muted/50">
+                            <td className="p-1.5 border border-border whitespace-nowrap">{row.gstin || ''}</td>
+                            <td className="p-1.5 border border-border max-w-[150px] truncate">{row.tradeName || ''}</td>
+                            <td className="p-1.5 border border-border whitespace-nowrap">{row.invoiceNum || ''}</td>
+                            <td className="p-1.5 border border-border whitespace-nowrap">{row.invoiceDate || ''}</td>
+                            <td className="p-1.5 border border-border text-right">{(row.taxable || 0).toFixed(2)}</td>
+                            <td className="p-1.5 border border-border text-right">{(row.igst || 0).toFixed(2)}</td>
+                            <td className="p-1.5 border border-border text-right">{(row.cgst || 0).toFixed(2)}</td>
+                            <td className="p-1.5 border border-border text-right">{(row.sgst || 0).toFixed(2)}</td>
+                            <td className="p-1.5 border border-border text-right">{(row.cess || 0).toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {tallyData.length > 10 && <p className="text-[10px] text-muted-foreground mt-1">...and {tallyData.length - 10} more rows</p>}
+                  <hr className="border-border my-4" />
+                </div>
+              )}
+
               <h3 className="text-sm font-bold text-primary mb-3">Download Files</h3>
               <div className="flex flex-wrap gap-4">
                 {(mode === 'tally' || mode === 'full' || mode === 'combined') && tallyData && (

@@ -394,6 +394,179 @@ export function parseCombined(wb: any) {
   return { gstrRows, ourRows, detection };
 }
 
+// Re-parse combined file with user-overridden column indices
+export function reParseCombined(wb: any, colOverrides: Record<string, { idx: number; required: boolean }>, dataColIdx: number) {
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true }) as any[][];
+  const headers = raw[0].map((c: any) => String(c || '').trim());
+  const findH = (names: string[]) => headers.findIndex((h: string) => names.some(n => h.toLowerCase().includes(n.toLowerCase())));
+
+  const iGSTIN = colOverrides['GSTIN of supplier']?.idx ?? -1;
+  const iInv = colOverrides['Invoice number']?.idx ?? -1;
+  const iDate = colOverrides['Invoice Date']?.idx ?? -1;
+  const iTax = colOverrides['Taxable Value (₹)']?.idx ?? -1;
+  const iTrade = findH(['Trade/Legal name', 'Trade Name', 'Supplier Name', 'Particulars']);
+  const iInvType = findH(['Invoice type']);
+  const iInvVal = findH(['Invoice Value']);
+  const iPlace = findH(['Place of supply']);
+  const iRC = findH(['Reverse Charge', 'Supply Attract']);
+  const iIGST = findH(['Integrated Tax', 'IGST']);
+  const iCGST = findH(['Central Tax', 'CGST']);
+  const iSGST = findH(['State/UT Tax', 'SGST']);
+  const iCess = findH(['Cess']);
+
+  const detection = {
+    headers, dataColIdx, gstrCount: 0, ourCount: 0,
+    cols: { ...colOverrides },
+  };
+
+  const gstrRows: any[] = [], ourRows: any[] = [];
+  for (let i = 1; i < raw.length; i++) {
+    const r = raw[i]; if (!r) continue;
+    const dataVal = String(r[dataColIdx] || '').trim();
+    if (!dataVal) continue;
+    const get = (idx: number) => idx >= 0 ? (r[idx] !== null && r[idx] !== undefined ? r[idx] : '') : '';
+    if (dataVal === 'GSTR 2B') {
+      detection.gstrCount++;
+      gstrRows.push({
+        'GSTIN of supplier': String(get(iGSTIN)), 'Trade/Legal name': String(get(iTrade)),
+        'Invoice number': String(get(iInv)), 'Invoice type': String(get(iInvType)),
+        'Invoice Date': String(get(iDate)), 'Invoice Value(₹)': get(iInvVal),
+        'Place of supply': String(get(iPlace)), 'Supply Attract Reverse Charge': String(get(iRC)),
+        'Taxable Value (₹)': get(iTax), 'Integrated Tax(₹)': get(iIGST),
+        'Central Tax(₹)': get(iCGST), 'State/UT Tax(₹)': get(iSGST), 'Cess(₹)': get(iCess),
+      });
+    } else if (dataVal === 'Our Data') {
+      detection.ourCount++;
+      ourRows.push({
+        gstin: normalise(String(get(iGSTIN))), tradeName: normalise(String(get(iTrade))),
+        invoiceNum: normalise(String(get(iInv))) || '(blank)',
+        invoiceDate: String(get(iDate)), taxable: numVal(get(iTax)),
+        igst: numVal(get(iIGST)), cgst: numVal(get(iCGST)),
+        sgst: numVal(get(iSGST)), cess: numVal(get(iCess)),
+      });
+    }
+  }
+  return { gstrRows, ourRows, detection };
+}
+
+// Re-parse Purchase Register with overridden column indices
+export function reParsePR(wb: any, ciOverrides: Record<string, number>) {
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true }) as any[][];
+  let hdrIdx = -1;
+  for (let i = 0; i < Math.min(15, raw.length); i++) {
+    if (raw[i] && raw[i].some((c: any) => {
+      const s = String(c || '').toLowerCase();
+      return (s.includes('bill') && s.includes('no')) || s === 'bill.no' || s === 'bill no';
+    })) { hdrIdx = i; break; }
+  }
+  if (hdrIdx === -1) throw new Error('Header row not found in Purchase Register.');
+  const ci = { ...ciOverrides };
+  const gcol = (row: any[], name: string) => {
+    const idx = ci[name];
+    if (idx === undefined || idx < 0) return null;
+    return row[idx];
+  };
+  const bills: Record<string, any> = {};
+  const billOrder: string[] = [];
+  for (let r = hdrIdx + 1; r < raw.length; r++) {
+    const row = raw[r];
+    if (!row || row.every((c: any) => c === null || c === undefined || c === '')) continue;
+    const rawBill = String(gcol(row, 'Bill.No') || '').trim();
+    if (!rawBill || rawBill === 'null') continue;
+    const ck = cleanString(rawBill);
+    if (!bills[ck]) {
+      billOrder.push(ck);
+      bills[ck] = {
+        rawBill, billDate: excelSerialToDate(gcol(row, 'Bill Date')),
+        party: String(gcol(row, 'Party Name') || '').trim(),
+        gstin: String(gcol(row, 'GST No') || '').trim(),
+        vouNo: String(gcol(row, 'Vou.No.') || '').trim(),
+        tax5: 0, sgst25: 0, cgst25: 0, tax12: 0, sgst6: 0, cgst6: 0,
+        tax18: 0, sgst9: 0, cgst9: 0, taxfree: 0, igst5: 0, igst12: 0, igst18: 0,
+      };
+    }
+    const b = bills[ck];
+    b.tax5 += nv4(gcol(row, 'Amt 5%')) + nv4(gcol(row, 'Amount 5%'));
+    b.sgst25 += nv4(gcol(row, 'Sgst 2.5%'));
+    b.cgst25 += nv4(gcol(row, 'Cgst 2.5%'));
+    b.tax12 += nv4(gcol(row, 'Amt 12%')) + nv4(gcol(row, 'Amount 12%'));
+    b.sgst6 += nv4(gcol(row, 'Sgst 6%'));
+    b.cgst6 += nv4(gcol(row, 'Cgst 6%'));
+    b.tax18 += nv4(gcol(row, 'Amt 18%')) + nv4(gcol(row, 'Amount 18%'));
+    b.sgst9 += nv4(gcol(row, 'Sgst 9%'));
+    b.cgst9 += nv4(gcol(row, 'Cgst 9%'));
+    b.taxfree += nv4(gcol(row, 'GST AMT 0'));
+    b.igst5 += nv4(gcol(row, 'Igst 5%'));
+    b.igst12 += nv4(gcol(row, 'Igst 12%'));
+    b.igst18 += nv4(gcol(row, 'Igst 18%'));
+  }
+  const rawHdr = raw[hdrIdx];
+  const rawRows: any[] = [];
+  for (let rr = hdrIdx + 1; rr < raw.length; rr++) {
+    const rrow = raw[rr];
+    if (!rrow || rrow.every((c: any) => c === null || c === undefined || c === '')) continue;
+    const rb = String(rrow[ci['Bill.No']] || '').trim();
+    rawRows.push({ cells: rrow, billKey: rb ? cleanString(rb) : null });
+  }
+  return { bills, billOrder, rawHdr, rawRows, ci };
+}
+
+// Re-parse Tally4 with overridden column indices
+export function reParseTally4(wb: any, colOverrides: Record<string, number>) {
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true }) as any[][];
+  let hdrIdx = -1;
+  for (let i = 0; i < Math.min(20, raw.length); i++) {
+    const r = raw[i]; if (!r) continue;
+    const rowStr = r.map((c: any) => String(c || '').toLowerCase()).join('|');
+    const hits = ['gstin', 'particulars', 'voucher', 'invoice', 'date'].filter(kw => rowStr.includes(kw)).length;
+    if (hits >= 2) { hdrIdx = i; break; }
+  }
+  if (hdrIdx === -1) throw new Error('Header row not found in Tally file.');
+  const hdrs = raw[hdrIdx].map((c: any) => String(c || '').trim().toLowerCase());
+  const cols = { ...colOverrides };
+  const gc = (row: any[], col: number) => col >= 0 ? row[col] : null;
+  const tally: Record<string, any> = {};
+  const tallyOrder: string[] = [];
+  for (let r = hdrIdx + 1; r < raw.length; r++) {
+    const row = raw[r];
+    if (!row || row.every((c: any) => c === null || c === undefined || c === '')) continue;
+    const party = normalise(String(gc(row, cols.party) || ''));
+    if (!party) continue;
+    const pl = party.toLowerCase();
+    if (pl.includes('grand total') || pl.includes('subtotal') || pl.includes('sub total')) continue;
+    const rawInv = String(gc(row, cols.invoice) || '').trim();
+    if (!rawInv || rawInv === 'null') continue;
+    const ck = cleanString(rawInv);
+    if (!tally[ck]) {
+      tallyOrder.push(ck);
+      tally[ck] = {
+        rawInv, invoiceDate: excelSerialToDate(gc(row, cols.date)), party,
+        gstin: normalise(String(gc(row, cols.gstin) || '')),
+        voucher: String(gc(row, cols.voucher) || ''),
+        _tax12: 0, _cgst6: 0, _sgst6: 0, _tax5: 0, _cgst25: 0, _sgst25: 0,
+        _tax18: 0, _cgst9: 0, _sgst9: 0, _igst12: 0, _taxfree: 0, _igst5: 0,
+      };
+    }
+    const t = tally[ck];
+    t._tax12 += nv4(gc(row, cols.tax12)); t._cgst6 += nv4(gc(row, cols.cgst6)); t._sgst6 += nv4(gc(row, cols.sgst6));
+    t._tax5 += nv4(gc(row, cols.tax5)); t._cgst25 += nv4(gc(row, cols.cgst25)); t._sgst25 += nv4(gc(row, cols.sgst25));
+    t._tax18 += nv4(gc(row, cols.tax18)); t._cgst9 += nv4(gc(row, cols.cgst9)); t._sgst9 += nv4(gc(row, cols.sgst9));
+    t._igst12 += nv4(gc(row, cols.igst12)); t._taxfree += nv4(gc(row, cols.taxfree)); t._igst5 += nv4(gc(row, cols.igst5));
+  }
+  const rawHdr = raw[hdrIdx];
+  const rawRows: any[] = [];
+  for (let rr = hdrIdx + 1; rr < raw.length; rr++) {
+    const rrow = raw[rr];
+    if (!rrow || rrow.every((c: any) => c === null || c === undefined || c === '')) continue;
+    const rawInv2 = String(cols.invoice >= 0 ? rrow[cols.invoice] : '').trim();
+    rawRows.push({ cells: rrow, billKey: rawInv2 ? cleanString(rawInv2) : null });
+  }
+  return { tally, tallyOrder, rawHdr, rawRows, detectedCols: cols, hdrs };
+}
+
 // ═══════════════════════════════════════════════════════════
 // PURCHASE REGISTER & TALLY4 PARSING (Option 4)
 // ═══════════════════════════════════════════════════════════

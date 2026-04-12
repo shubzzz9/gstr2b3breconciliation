@@ -249,6 +249,7 @@ const Tool = () => {
     setTallyName(''); setGstrName(''); setCombinedName(''); setPrName(''); setTally4Name('');
     setTallyScan(null); setGstrScan(null); setTallyData(null); setRecoRows(null);
     setDiagData(null); setAuditResult(null); setTallyResult(null);
+    setCombinedDetection(null); setPrDetection(null); setTally4Detection(null);
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="spinner" /></div>;

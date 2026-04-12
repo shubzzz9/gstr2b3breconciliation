@@ -42,6 +42,9 @@ const Tool = () => {
   const [singleMap, setSingleMap] = useState<Record<string, number>>({});
   const [multiMap, setMultiMap] = useState<Record<string, number[]>>({});
   const [gstrDetected, setGstrDetected] = useState<Record<string, string | null>>({});
+  const [combinedDetection, setCombinedDetection] = useState<any>(null);
+  const [prDetection, setPrDetection] = useState<any>(null);
+  const [tally4Detection, setTally4Detection] = useState<any>(null);
 
   // Results
   const [tallyData, setTallyData] = useState<any>(null);
@@ -163,12 +166,15 @@ const Tool = () => {
         const prRes = parsePurchaseRegister(prWB);
         const talRes = parseTally4(tallyWB4);
         setTallyResult({ prResult: prRes, tallyResult4: talRes });
+        setPrDetection(prRes.ci);
+        setTally4Detection(talRes.detectedCols);
         setStep(2);
         return;
       }
       if (m === 'combined') {
         const combined = parseCombined(combinedWB);
         setTallyResult(combined);
+        setCombinedDetection(combined.detection);
         setStep(2);
         return;
       }
@@ -243,6 +249,7 @@ const Tool = () => {
     setTallyName(''); setGstrName(''); setCombinedName(''); setPrName(''); setTally4Name('');
     setTallyScan(null); setGstrScan(null); setTallyData(null); setRecoRows(null);
     setDiagData(null); setAuditResult(null); setTallyResult(null);
+    setCombinedDetection(null); setPrDetection(null); setTally4Detection(null);
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="spinner" /></div>;
@@ -454,7 +461,66 @@ const Tool = () => {
                   </ul>
                 </div>
               )}
-              {(mode === 'combined' || mode === 'prtally') && (
+              {/* Combined mode mapping UI */}
+              {mode === 'combined' && combinedDetection && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-bold text-primary bg-secondary p-2 rounded mb-2">📋 Combined File — Column Detection</h3>
+                  <div className="alert-box alert-success mb-3 text-xs">
+                    <strong>✓ File parsed successfully.</strong> Found <strong>{combinedDetection.gstrCount}</strong> GSTR-2B rows and <strong>{combinedDetection.ourCount}</strong> Our Data rows.
+                  </div>
+                  <table className="map-table">
+                    <thead><tr><th>Column</th><th>Detected At</th><th>Status</th></tr></thead>
+                    <tbody>
+                      {Object.entries(combinedDetection.cols as Record<string, { idx: number; required: boolean }>).map(([col, info]) => (
+                        <tr key={col}>
+                          <td className="text-xs font-medium">{col} {info.required && <span className="text-destructive">*</span>}</td>
+                          <td className="text-xs">{info.idx >= 0 ? `Column ${info.idx + 1} — "${combinedDetection.headers[info.idx]}"` : '(Not found)'}</td>
+                          <td>{info.idx >= 0 ? <span className="text-xs text-success font-semibold">✓ Found</span> : info.required ? <span className="text-xs text-destructive font-semibold">✗ Missing</span> : <span className="text-xs text-warning font-semibold">⚠ Optional</span>}</td>
+                        </tr>
+                      ))}
+                      <tr>
+                        <td className="text-xs font-medium">DATA column <span className="text-destructive">*</span></td>
+                        <td className="text-xs">Column {combinedDetection.dataColIdx + 1} — "{combinedDetection.headers[combinedDetection.dataColIdx]}"</td>
+                        <td><span className="text-xs text-success font-semibold">✓ Found</span></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* PR vs Tally mapping UI */}
+              {mode === 'prtally' && prDetection && tally4Detection && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-bold text-primary bg-secondary p-2 rounded mb-2">📄 Purchase Register — Column Detection</h3>
+                  <table className="map-table">
+                    <thead><tr><th>Column</th><th>Detected Index</th><th>Status</th></tr></thead>
+                    <tbody>
+                      {Object.entries(prDetection as Record<string, number>).map(([col, idx]) => (
+                        <tr key={col}>
+                          <td className="text-xs font-medium">{col}</td>
+                          <td className="text-xs">Column {idx + 1}</td>
+                          <td><span className="text-xs text-success font-semibold">✓ Found</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  <h3 className="text-sm font-bold text-primary bg-secondary p-2 rounded mb-2 mt-4">📊 Tally File — Column Detection</h3>
+                  <table className="map-table">
+                    <thead><tr><th>Column</th><th>Detected Index</th><th>Status</th></tr></thead>
+                    <tbody>
+                      {Object.entries(tally4Detection as Record<string, number>).map(([col, idx]) => (
+                        <tr key={col}>
+                          <td className="text-xs font-medium">{col}</td>
+                          <td className="text-xs">{idx >= 0 ? `Column ${idx + 1}` : '(Not found)'}</td>
+                          <td>{idx >= 0 ? <span className="text-xs text-success font-semibold">✓ Found</span> : <span className="text-xs text-warning font-semibold">⚠ Not detected</span>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {(mode === 'combined' || mode === 'prtally') && !combinedDetection && !prDetection && (
                 <div className="alert-box alert-success">
                   <strong>✓ File parsed successfully.</strong> Ready to process.
                 </div>
@@ -531,6 +597,41 @@ const Tool = () => {
                   </div>
                 );
               })()}
+
+              {/* Standardiser Preview */}
+              {tallyData && tallyData.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-bold text-primary mb-2">📊 Standardised Data Preview <span className="text-xs font-normal text-muted-foreground">(first 10 rows)</span></h3>
+                  <div className="relative w-full overflow-auto border border-border rounded max-h-[300px]">
+                    <table className="w-full border-collapse text-[11px]">
+                      <thead className="sticky top-0">
+                        <tr>
+                          {['GSTIN', 'Trade Name', 'Invoice No', 'Invoice Date', 'Taxable', 'IGST', 'CGST', 'SGST', 'Cess'].map(h => (
+                            <th key={h} className="bg-secondary p-1.5 border border-border font-semibold text-left whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tallyData.slice(0, 10).map((row: any, i: number) => (
+                          <tr key={i} className="hover:bg-muted/50">
+                            <td className="p-1.5 border border-border whitespace-nowrap">{row.gstin || ''}</td>
+                            <td className="p-1.5 border border-border max-w-[150px] truncate">{row.tradeName || ''}</td>
+                            <td className="p-1.5 border border-border whitespace-nowrap">{row.invoiceNum || ''}</td>
+                            <td className="p-1.5 border border-border whitespace-nowrap">{row.invoiceDate || ''}</td>
+                            <td className="p-1.5 border border-border text-right">{(row.taxable || 0).toFixed(2)}</td>
+                            <td className="p-1.5 border border-border text-right">{(row.igst || 0).toFixed(2)}</td>
+                            <td className="p-1.5 border border-border text-right">{(row.cgst || 0).toFixed(2)}</td>
+                            <td className="p-1.5 border border-border text-right">{(row.sgst || 0).toFixed(2)}</td>
+                            <td className="p-1.5 border border-border text-right">{(row.cess || 0).toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {tallyData.length > 10 && <p className="text-[10px] text-muted-foreground mt-1">...and {tallyData.length - 10} more rows</p>}
+                  <hr className="border-border my-4" />
+                </div>
+              )}
 
               <h3 className="text-sm font-bold text-primary mb-3">Download Files</h3>
               <div className="flex flex-wrap gap-4">

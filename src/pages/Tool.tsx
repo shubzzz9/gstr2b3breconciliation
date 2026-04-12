@@ -169,7 +169,9 @@ const Tool = () => {
         const talRes = parseTally4(tallyWB4);
         setTallyResult({ prResult: prRes, tallyResult4: talRes });
         setPrDetection(prRes.ci);
+        setPrHeaders(prRes.rawHdr.map((c: any) => String(c || '').trim()));
         setTally4Detection(talRes.detectedCols);
+        setTally4Headers(talRes.rawHdr.map((c: any) => String(c || '').trim()));
         setStep(2);
         return;
       }

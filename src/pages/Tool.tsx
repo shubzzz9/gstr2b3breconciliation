@@ -460,7 +460,66 @@ const Tool = () => {
                   </ul>
                 </div>
               )}
-              {(mode === 'combined' || mode === 'prtally') && (
+              {/* Combined mode mapping UI */}
+              {mode === 'combined' && combinedDetection && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-bold text-primary bg-secondary p-2 rounded mb-2">📋 Combined File — Column Detection</h3>
+                  <div className="alert-box alert-success mb-3 text-xs">
+                    <strong>✓ File parsed successfully.</strong> Found <strong>{combinedDetection.gstrCount}</strong> GSTR-2B rows and <strong>{combinedDetection.ourCount}</strong> Our Data rows.
+                  </div>
+                  <table className="map-table">
+                    <thead><tr><th>Column</th><th>Detected At</th><th>Status</th></tr></thead>
+                    <tbody>
+                      {Object.entries(combinedDetection.cols as Record<string, { idx: number; required: boolean }>).map(([col, info]) => (
+                        <tr key={col}>
+                          <td className="text-xs font-medium">{col} {info.required && <span className="text-destructive">*</span>}</td>
+                          <td className="text-xs">{info.idx >= 0 ? `Column ${info.idx + 1} — "${combinedDetection.headers[info.idx]}"` : '(Not found)'}</td>
+                          <td>{info.idx >= 0 ? <span className="text-xs text-success font-semibold">✓ Found</span> : info.required ? <span className="text-xs text-destructive font-semibold">✗ Missing</span> : <span className="text-xs text-warning font-semibold">⚠ Optional</span>}</td>
+                        </tr>
+                      ))}
+                      <tr>
+                        <td className="text-xs font-medium">DATA column <span className="text-destructive">*</span></td>
+                        <td className="text-xs">Column {combinedDetection.dataColIdx + 1} — "{combinedDetection.headers[combinedDetection.dataColIdx]}"</td>
+                        <td><span className="text-xs text-success font-semibold">✓ Found</span></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* PR vs Tally mapping UI */}
+              {mode === 'prtally' && prDetection && tally4Detection && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-bold text-primary bg-secondary p-2 rounded mb-2">📄 Purchase Register — Column Detection</h3>
+                  <table className="map-table">
+                    <thead><tr><th>Column</th><th>Detected Index</th><th>Status</th></tr></thead>
+                    <tbody>
+                      {Object.entries(prDetection as Record<string, number>).map(([col, idx]) => (
+                        <tr key={col}>
+                          <td className="text-xs font-medium">{col}</td>
+                          <td className="text-xs">Column {idx + 1}</td>
+                          <td><span className="text-xs text-success font-semibold">✓ Found</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  <h3 className="text-sm font-bold text-primary bg-secondary p-2 rounded mb-2 mt-4">📊 Tally File — Column Detection</h3>
+                  <table className="map-table">
+                    <thead><tr><th>Column</th><th>Detected Index</th><th>Status</th></tr></thead>
+                    <tbody>
+                      {Object.entries(tally4Detection as Record<string, number>).map(([col, idx]) => (
+                        <tr key={col}>
+                          <td className="text-xs font-medium">{col}</td>
+                          <td className="text-xs">{idx >= 0 ? `Column ${idx + 1}` : '(Not found)'}</td>
+                          <td>{idx >= 0 ? <span className="text-xs text-success font-semibold">✓ Found</span> : <span className="text-xs text-warning font-semibold">⚠ Not detected</span>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {(mode === 'combined' || mode === 'prtally') && !combinedDetection && !prDetection && (
                 <div className="alert-box alert-success">
                   <strong>✓ File parsed successfully.</strong> Ready to process.
                 </div>

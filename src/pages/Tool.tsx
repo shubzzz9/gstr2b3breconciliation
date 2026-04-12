@@ -42,6 +42,9 @@ const Tool = () => {
   const [singleMap, setSingleMap] = useState<Record<string, number>>({});
   const [multiMap, setMultiMap] = useState<Record<string, number[]>>({});
   const [gstrDetected, setGstrDetected] = useState<Record<string, string | null>>({});
+  const [combinedDetection, setCombinedDetection] = useState<any>(null);
+  const [prDetection, setPrDetection] = useState<any>(null);
+  const [tally4Detection, setTally4Detection] = useState<any>(null);
 
   // Results
   const [tallyData, setTallyData] = useState<any>(null);

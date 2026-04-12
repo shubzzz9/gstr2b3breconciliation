@@ -199,9 +199,13 @@ const Tool = () => {
     setStep(3); setProgress(0);
     try {
       if (mode === 'prtally') {
+        setProgressLabel('Re-parsing with mappings...');
+        setProgress(30);
+        const prRes = reParsePR(prWB, prDetection);
+        const talRes = reParseTally4(tallyWB4, tally4Detection);
         setProgressLabel('Running audit...');
         setProgress(50);
-        const result = reconcilePRTally(tallyResult.prResult, tallyResult.tallyResult4);
+        const result = reconcilePRTally(prRes, talRes);
         setAuditResult(result);
         setProgress(100);
         setStep(4);

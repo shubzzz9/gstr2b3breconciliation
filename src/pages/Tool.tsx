@@ -212,12 +212,16 @@ const Tool = () => {
         return;
       }
       if (mode === 'combined') {
+        setProgressLabel('Re-parsing with mappings...');
+        setProgress(20);
+        const reparsed = reParseCombined(combinedWB, combinedDetection.cols, combinedDetection.dataColIdx);
+        setTallyResult(reparsed);
         setProgressLabel('Reconciling combined file...');
-        setProgress(30);
-        const reco = reconcile(tallyResult.gstrRows, tallyResult.ourRows);
+        setProgress(40);
+        const reco = reconcile(reparsed.gstrRows, reparsed.ourRows);
         setRecoRows(reco);
         setProgress(70);
-        const diag = diagnoseMismatches(tallyResult.gstrRows, tallyResult.ourRows, reco);
+        const diag = diagnoseMismatches(reparsed.gstrRows, reparsed.ourRows, reco);
         setDiagData(diag);
         setProgress(100);
         setStep(4);

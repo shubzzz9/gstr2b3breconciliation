@@ -166,12 +166,15 @@ const Tool = () => {
         const prRes = parsePurchaseRegister(prWB);
         const talRes = parseTally4(tallyWB4);
         setTallyResult({ prResult: prRes, tallyResult4: talRes });
+        setPrDetection(prRes.ci);
+        setTally4Detection(talRes.detectedCols);
         setStep(2);
         return;
       }
       if (m === 'combined') {
         const combined = parseCombined(combinedWB);
         setTallyResult(combined);
+        setCombinedDetection(combined.detection);
         setStep(2);
         return;
       }

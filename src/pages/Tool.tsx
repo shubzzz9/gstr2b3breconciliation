@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import XLSX from 'xlsx-js-style';
-import { scanTally, processTally, scanGSTR2B, parseGSTR2B, parseCombined, parsePurchaseRegister, parseTally4 } from '@/lib/gst-parsers';
+import { scanTally, processTally, scanGSTR2B, parseGSTR2B, parseCombined, parsePurchaseRegister, parseTally4, reParseCombined, reParsePR, reParseTally4 } from '@/lib/gst-parsers';
 import { reconcile, diagnoseMismatches, reconcilePRTally } from '@/lib/gst-reconcile';
 import { downloadFile1, downloadFile2, downloadFile3, downloadPRTallyAudit } from '@/lib/gst-downloads';
 import { TALLY_SINGLE_ROWS, TALLY_MULTI_ROWS, GSTR_STD_COLS } from '@/lib/gst-helpers';
@@ -43,8 +43,10 @@ const Tool = () => {
   const [multiMap, setMultiMap] = useState<Record<string, number[]>>({});
   const [gstrDetected, setGstrDetected] = useState<Record<string, string | null>>({});
   const [combinedDetection, setCombinedDetection] = useState<any>(null);
-  const [prDetection, setPrDetection] = useState<any>(null);
-  const [tally4Detection, setTally4Detection] = useState<any>(null);
+  const [prDetection, setPrDetection] = useState<Record<string, number>>({});
+  const [prHeaders, setPrHeaders] = useState<string[]>([]);
+  const [tally4Detection, setTally4Detection] = useState<Record<string, number>>({});
+  const [tally4Headers, setTally4Headers] = useState<string[]>([]);
 
   // Results
   const [tallyData, setTallyData] = useState<any>(null);
@@ -167,7 +169,9 @@ const Tool = () => {
         const talRes = parseTally4(tallyWB4);
         setTallyResult({ prResult: prRes, tallyResult4: talRes });
         setPrDetection(prRes.ci);
+        setPrHeaders(prRes.rawHdr.map((c: any) => String(c || '').trim()));
         setTally4Detection(talRes.detectedCols);
+        setTally4Headers(talRes.rawHdr.map((c: any) => String(c || '').trim()));
         setStep(2);
         return;
       }
@@ -195,21 +199,29 @@ const Tool = () => {
     setStep(3); setProgress(0);
     try {
       if (mode === 'prtally') {
+        setProgressLabel('Re-parsing with mappings...');
+        setProgress(30);
+        const prRes = reParsePR(prWB, prDetection);
+        const talRes = reParseTally4(tallyWB4, tally4Detection);
         setProgressLabel('Running audit...');
         setProgress(50);
-        const result = reconcilePRTally(tallyResult.prResult, tallyResult.tallyResult4);
+        const result = reconcilePRTally(prRes, talRes);
         setAuditResult(result);
         setProgress(100);
         setStep(4);
         return;
       }
       if (mode === 'combined') {
+        setProgressLabel('Re-parsing with mappings...');
+        setProgress(20);
+        const reparsed = reParseCombined(combinedWB, combinedDetection.cols, combinedDetection.dataColIdx);
+        setTallyResult(reparsed);
         setProgressLabel('Reconciling combined file...');
-        setProgress(30);
-        const reco = reconcile(tallyResult.gstrRows, tallyResult.ourRows);
+        setProgress(40);
+        const reco = reconcile(reparsed.gstrRows, reparsed.ourRows);
         setRecoRows(reco);
         setProgress(70);
-        const diag = diagnoseMismatches(tallyResult.gstrRows, tallyResult.ourRows, reco);
+        const diag = diagnoseMismatches(reparsed.gstrRows, reparsed.ourRows, reco);
         setDiagData(diag);
         setProgress(100);
         setStep(4);
@@ -249,7 +261,8 @@ const Tool = () => {
     setTallyName(''); setGstrName(''); setCombinedName(''); setPrName(''); setTally4Name('');
     setTallyScan(null); setGstrScan(null); setTallyData(null); setRecoRows(null);
     setDiagData(null); setAuditResult(null); setTallyResult(null);
-    setCombinedDetection(null); setPrDetection(null); setTally4Detection(null);
+    setCombinedDetection(null); setPrDetection({}); setTally4Detection({});
+    setPrHeaders([]); setTally4Headers([]);
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="spinner" /></div>;
@@ -464,23 +477,36 @@ const Tool = () => {
               {/* Combined mode mapping UI */}
               {mode === 'combined' && combinedDetection && (
                 <div className="mb-6">
-                  <h3 className="text-sm font-bold text-primary bg-secondary p-2 rounded mb-2">📋 Combined File — Column Detection</h3>
+                  <h3 className="text-sm font-bold text-primary bg-secondary p-2 rounded mb-2">📋 Combined File — Column Mapping</h3>
                   <div className="alert-box alert-success mb-3 text-xs">
                     <strong>✓ File parsed successfully.</strong> Found <strong>{combinedDetection.gstrCount}</strong> GSTR-2B rows and <strong>{combinedDetection.ourCount}</strong> Our Data rows.
                   </div>
                   <table className="map-table">
-                    <thead><tr><th>Column</th><th>Detected At</th><th>Status</th></tr></thead>
+                    <thead><tr><th>Column</th><th>Mapped To</th><th>Status</th></tr></thead>
                     <tbody>
                       {Object.entries(combinedDetection.cols as Record<string, { idx: number; required: boolean }>).map(([col, info]) => (
                         <tr key={col}>
                           <td className="text-xs font-medium">{col} {info.required && <span className="text-destructive">*</span>}</td>
-                          <td className="text-xs">{info.idx >= 0 ? `Column ${info.idx + 1} — "${combinedDetection.headers[info.idx]}"` : '(Not found)'}</td>
-                          <td>{info.idx >= 0 ? <span className="text-xs text-success font-semibold">✓ Found</span> : info.required ? <span className="text-xs text-destructive font-semibold">✗ Missing</span> : <span className="text-xs text-warning font-semibold">⚠ Optional</span>}</td>
+                          <td>
+                            <select className="w-full p-1 border border-input rounded text-xs bg-background"
+                              value={info.idx}
+                              onChange={(e) => {
+                                const newIdx = parseInt(e.target.value);
+                                setCombinedDetection((prev: any) => ({
+                                  ...prev,
+                                  cols: { ...prev.cols, [col]: { ...prev.cols[col], idx: newIdx } }
+                                }));
+                              }}>
+                              <option value={-1}>(Not mapped)</option>
+                              {combinedDetection.headers.map((h: string, i: number) => <option key={i} value={i}>{h}</option>)}
+                            </select>
+                          </td>
+                          <td>{info.idx >= 0 ? <span className="text-xs text-success font-semibold">✓ Mapped</span> : info.required ? <span className="text-xs text-destructive font-semibold">✗ Required</span> : <span className="text-xs text-warning font-semibold">⚠ Optional</span>}</td>
                         </tr>
                       ))}
                       <tr>
                         <td className="text-xs font-medium">DATA column <span className="text-destructive">*</span></td>
-                        <td className="text-xs">Column {combinedDetection.dataColIdx + 1} — "{combinedDetection.headers[combinedDetection.dataColIdx]}"</td>
+                        <td className="text-xs font-medium text-success">Column {combinedDetection.dataColIdx + 1} — "{combinedDetection.headers[combinedDetection.dataColIdx]}"</td>
                         <td><span className="text-xs text-success font-semibold">✓ Found</span></td>
                       </tr>
                     </tbody>
@@ -489,40 +515,49 @@ const Tool = () => {
               )}
 
               {/* PR vs Tally mapping UI */}
-              {mode === 'prtally' && prDetection && tally4Detection && (
+              {mode === 'prtally' && Object.keys(prDetection).length > 0 && Object.keys(tally4Detection).length > 0 && (
                 <div className="mb-6">
-                  <h3 className="text-sm font-bold text-primary bg-secondary p-2 rounded mb-2">📄 Purchase Register — Column Detection</h3>
+                  <h3 className="text-sm font-bold text-primary bg-secondary p-2 rounded mb-2">📄 Purchase Register — Column Mapping</h3>
                   <table className="map-table">
-                    <thead><tr><th>Column</th><th>Detected Index</th><th>Status</th></tr></thead>
+                    <thead><tr><th>Column</th><th>Mapped To</th><th>Status</th></tr></thead>
                     <tbody>
-                      {Object.entries(prDetection as Record<string, number>).map(([col, idx]) => (
+                      {Object.entries(prDetection).map(([col, idx]) => (
                         <tr key={col}>
                           <td className="text-xs font-medium">{col}</td>
-                          <td className="text-xs">Column {idx + 1}</td>
-                          <td><span className="text-xs text-success font-semibold">✓ Found</span></td>
+                          <td>
+                            <select className="w-full p-1 border border-input rounded text-xs bg-background"
+                              value={idx}
+                              onChange={(e) => setPrDetection(prev => ({ ...prev, [col]: parseInt(e.target.value) }))}>
+                              <option value={-1}>(Not mapped)</option>
+                              {prHeaders.map((h: string, i: number) => <option key={i} value={i}>{h}</option>)}
+                            </select>
+                          </td>
+                          <td>{idx >= 0 ? <span className="text-xs text-success font-semibold">✓ Mapped</span> : <span className="text-xs text-warning font-semibold">⚠ Not detected</span>}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
 
-                  <h3 className="text-sm font-bold text-primary bg-secondary p-2 rounded mb-2 mt-4">📊 Tally File — Column Detection</h3>
+                  <h3 className="text-sm font-bold text-primary bg-secondary p-2 rounded mb-2 mt-4">📊 Tally File — Column Mapping</h3>
                   <table className="map-table">
-                    <thead><tr><th>Column</th><th>Detected Index</th><th>Status</th></tr></thead>
+                    <thead><tr><th>Column</th><th>Mapped To</th><th>Status</th></tr></thead>
                     <tbody>
-                      {Object.entries(tally4Detection as Record<string, number>).map(([col, idx]) => (
+                      {Object.entries(tally4Detection).map(([col, idx]) => (
                         <tr key={col}>
                           <td className="text-xs font-medium">{col}</td>
-                          <td className="text-xs">{idx >= 0 ? `Column ${idx + 1}` : '(Not found)'}</td>
-                          <td>{idx >= 0 ? <span className="text-xs text-success font-semibold">✓ Found</span> : <span className="text-xs text-warning font-semibold">⚠ Not detected</span>}</td>
+                          <td>
+                            <select className="w-full p-1 border border-input rounded text-xs bg-background"
+                              value={idx}
+                              onChange={(e) => setTally4Detection(prev => ({ ...prev, [col]: parseInt(e.target.value) }))}>
+                              <option value={-1}>(Not mapped)</option>
+                              {tally4Headers.map((h: string, i: number) => <option key={i} value={i}>{h}</option>)}
+                            </select>
+                          </td>
+                          <td>{idx >= 0 ? <span className="text-xs text-success font-semibold">✓ Mapped</span> : <span className="text-xs text-warning font-semibold">⚠ Not detected</span>}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                </div>
-              )}
-              {(mode === 'combined' || mode === 'prtally') && !combinedDetection && !prDetection && (
-                <div className="alert-box alert-success">
-                  <strong>✓ File parsed successfully.</strong> Ready to process.
                 </div>
               )}
               <div className="flex justify-between mt-6">

@@ -324,7 +324,16 @@ const Tool = () => {
             ))}
           </div>
 
-          {error && <div className="alert-box alert-error mb-4">{error}</div>}
+          {error && (
+            <div className="alert-box alert-error mb-4">
+              {error}
+              {error.includes('GSTR-2B') && (
+                <button onClick={downloadGSTR2BTemplate} className="ml-3 underline text-xs font-semibold hover:opacity-80">
+                  📥 Download GSTR-2B Template
+                </button>
+              )}
+            </div>
+          )}
 
           {/* STEP 1: Upload */}
           {step === 1 && (

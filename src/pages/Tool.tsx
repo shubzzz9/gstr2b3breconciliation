@@ -494,6 +494,18 @@ const Tool = () => {
                       })}
                     </tbody>
                   </table>
+                  {(() => {
+                    const REQUIRED = new Set(['GSTIN of supplier', 'Invoice number', 'Invoice Date', 'Taxable Value (₹)']);
+                    const missingReq = GSTR_STD_COLS.filter(c => REQUIRED.has(c) && !gstrDetected[c]);
+                    return missingReq.length > 0 ? (
+                      <div className="mt-3 p-3 bg-destructive/10 border border-destructive/30 rounded text-xs">
+                        <strong>⚠ {missingReq.length} required column(s) not mapped.</strong> You can map them above, or download a template and re-upload your data in the correct format.
+                        <button onClick={downloadGSTR2BTemplate} className="ml-2 underline font-semibold text-destructive hover:opacity-80">
+                          📥 Download GSTR-2B Template
+                        </button>
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
               )}
 

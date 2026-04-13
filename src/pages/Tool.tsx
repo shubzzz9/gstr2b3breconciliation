@@ -8,6 +8,29 @@ import { reconcile, diagnoseMismatches, reconcilePRTally } from '@/lib/gst-recon
 import { downloadFile1, downloadFile2, downloadFile3, downloadPRTallyAudit } from '@/lib/gst-downloads';
 import { TALLY_SINGLE_ROWS, TALLY_MULTI_ROWS, GSTR_STD_COLS } from '@/lib/gst-helpers';
 import { generateFingerprint } from '@/lib/fingerprint';
+
+const downloadGSTR2BTemplate = () => {
+  const wb = XLSX.utils.book_new();
+  const templateHeaders = [
+    'GSTIN of supplier', 'Trade/Legal name', 'Invoice number', 'Invoice type',
+    'Invoice Date', 'Invoice Value(₹)', 'Place of supply',
+    'Supply Attract Reverse Charge', 'Taxable Value (₹)',
+    'Integrated Tax(₹)', 'Central Tax(₹)', 'State/UT Tax(₹)', 'Cess(₹)',
+  ];
+  const sampleRow = ['27AAACV0141N1ZC', 'ABC Traders', 'INV-001', 'Regular', '01-04-2024', '11800', '27-Maharashtra', 'No', '10000', '0', '900', '900', '0'];
+  const ws = XLSX.utils.aoa_to_sheet([templateHeaders, sampleRow]);
+  templateHeaders.forEach((_, i) => {
+    const col = XLSX.utils.encode_col(i);
+    if (!ws['!cols']) ws['!cols'] = [];
+    ws['!cols'][i] = { wch: Math.max(templateHeaders[i].length + 2, 18) };
+    const cellRef = col + '1';
+    if (ws[cellRef]) {
+      ws[cellRef].s = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '2D5F8A' } } };
+    }
+  });
+  XLSX.utils.book_append_sheet(wb, ws, 'GSTR-2B Template');
+  XLSX.writeFile(wb, 'GSTR-2B_Template.xlsx');
+};
 import ContactPaywall from '@/components/ContactPaywall';
 import AuthModal from '@/components/AuthModal';
 import Navbar from '@/components/Navbar';

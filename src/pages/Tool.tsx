@@ -299,9 +299,11 @@ const Tool = () => {
       <AdBanner slot="TOP_AD_SLOT" className="py-2 bg-secondary" />
       <main className="flex-1 p-4 md:p-6">
       <div className="max-w-[1100px] mx-auto">
+        <h1 className="sr-only">GSTR-2B Reconciliation Tool Online — Free GST Reconciliation & Audit</h1>
         {/* Tool Header */}
         <div className="gradient-header text-primary-foreground p-5 rounded-t-xl flex flex-wrap items-center justify-between gap-4">
           <div>
+            <h2 className="text-lg font-bold">GSTR-2B Reconciliation Tool</h2>
             <p className="text-xs opacity-85 mt-1">Convert, compare and reconcile your Purchase Data with GSTR-2B</p>
           </div>
           {user && (
@@ -775,8 +777,8 @@ const Tool = () => {
       {/* Mid-page Ad Banner */}
       <AdBanner slot="MID_AD_SLOT" className="py-3 bg-background" />
 
-      {/* SEO Content Section - visible to search engines, helpful for users */}
-      <section className="bg-secondary border-t border-border">
+      {/* SEO Content Section */}
+      <article className="bg-secondary border-t border-border">
         <div className="max-w-[1100px] mx-auto px-4 py-8">
           <h2 className="text-lg font-bold text-foreground mb-4">Free Online GSTR-2B Reconciliation Tool</h2>
           <div className="prose prose-sm text-muted-foreground max-w-none">
@@ -785,24 +787,50 @@ const Tool = () => {
             </p>
             <h3 className="text-sm font-semibold text-foreground mt-4 mb-2">What This Tool Does</h3>
             <ul className="list-disc pl-5 space-y-1 text-xs">
-              <li><strong>GSTR-2B vs Tally Reconciliation</strong> — Match your purchase register with GSTR-2B invoices</li>
-              <li><strong>Auto Column Detection</strong> — Works with any Excel format, no manual mapping needed</li>
-              <li><strong>Smart Invoice Matching</strong> — Matches by GSTIN + Invoice Number, handles typos</li>
+              <li><strong>GSTR-2B vs Tally Reconciliation</strong> — Match your purchase register with GSTR-2B invoices by GSTIN and invoice number</li>
+              <li><strong>Auto Column Detection</strong> — Works with any Excel format from Tally, Busy, or manual registers</li>
+              <li><strong>Smart Invoice Matching</strong> — Fuzzy matching handles typos in invoice numbers and GSTINs</li>
               <li><strong>Mismatch Diagnosis</strong> — Tells you WHY invoices don't match with actionable fixes</li>
-              <li><strong>ITC Risk Report</strong> — Identifies invoices not in GSTR-2B (ITC at risk)</li>
-              <li><strong>Styled Excel Output</strong> — Professional color-coded reports ready for clients</li>
+              <li><strong>ITC Risk Report</strong> — Identifies invoices not in GSTR-2B putting your Input Tax Credit at risk</li>
+              <li><strong>Styled Excel Output</strong> — Professional color-coded reconciliation reports ready for clients</li>
+              <li><strong>Purchase Register vs Tally Audit</strong> — Line-by-line comparison of client books with Tally data</li>
             </ul>
             <h3 className="text-sm font-semibold text-foreground mt-4 mb-2">Who Uses This Tool?</h3>
             <p className="text-xs">
               <strong>Chartered Accountants (CAs)</strong>, <strong>tax professionals</strong>, <strong>GST practitioners</strong>, and <strong>businesses</strong> across India use this tool to save hours of manual reconciliation work. Perfect for quarterly GST filing, annual audits, and ITC verification.
             </p>
-            <h3 className="text-sm font-semibold text-foreground mt-4 mb-2">100% Secure</h3>
+            <h3 className="text-sm font-semibold text-foreground mt-4 mb-2">100% Secure — Browser-Based Processing</h3>
             <p className="text-xs">
               All file processing happens <strong>locally in your browser</strong>. Your Excel files are never uploaded to any server. Your sensitive GSTIN data, invoice details, and financial information stay on your device.
             </p>
+
+            {/* FAQ section matching JSON-LD for better indexing */}
+            <h3 className="text-sm font-semibold text-foreground mt-6 mb-3">Frequently Asked Questions</h3>
+            <div className="space-y-3 text-xs">
+              <details className="group">
+                <summary className="font-semibold text-foreground cursor-pointer hover:text-primary">How to reconcile GSTR-2B with Tally data?</summary>
+                <p className="mt-1 pl-2">Upload your Tally purchase export and GSTR-2B file downloaded from the GST portal into our tool. It auto-detects columns, matches invoices by GSTIN and invoice number, and generates a reconciliation report showing matched, unmatched, and mismatched invoices with actionable diagnosis.</p>
+              </details>
+              <details className="group">
+                <summary className="font-semibold text-foreground cursor-pointer hover:text-primary">Is this GST reconciliation tool free?</summary>
+                <p className="mt-1 pl-2">Yes, the tool offers 10 free exports after signup. You can upload files, process, and view results without creating an account. Signup is only needed to download the reconciled Excel report.</p>
+              </details>
+              <details className="group">
+                <summary className="font-semibold text-foreground cursor-pointer hover:text-primary">Is my data safe with this online GST tool?</summary>
+                <p className="mt-1 pl-2">100% safe. All file processing happens directly in your browser. Your Excel files are never uploaded to any server. The tool reads and processes everything locally on your device.</p>
+              </details>
+              <details className="group">
+                <summary className="font-semibold text-foreground cursor-pointer hover:text-primary">What file formats does the GSTR-2B reconciliation tool support?</summary>
+                <p className="mt-1 pl-2">The tool supports .xlsx and .xls Excel files. You can upload Tally exports, purchase registers, GSTR-2B downloads from the GST portal, or any invoice-wise Excel file with columns like GSTIN, Invoice Number, Date, and Tax amounts.</p>
+              </details>
+              <details className="group">
+                <summary className="font-semibold text-foreground cursor-pointer hover:text-primary">Can I reconcile Purchase Register with Tally data?</summary>
+                <p className="mt-1 pl-2">Yes! Option 4 in the tool lets you compare a client's purchase register with Tally-accounted data. It performs a line-by-line audit showing differences in taxable values, SGST, CGST, IGST across all tax slabs.</p>
+              </details>
+            </div>
           </div>
         </div>
-      </section>
+      </article>
 
       {/* Bottom Ad Banner */}
       <AdBanner slot="BOTTOM_AD_SLOT" className="py-3 bg-secondary border-t border-border" />

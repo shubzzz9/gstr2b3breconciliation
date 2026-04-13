@@ -15,7 +15,7 @@ const Navbar = () => {
             <span className="text-4xl sm:text-5xl leading-none" aria-hidden="true">🧾</span>
             <div>
               <p className="text-sm sm:text-base font-bold tracking-widest uppercase text-muted-foreground" style={{ fontFamily: "'Courier New', Courier, monospace" }}>TechBharat Studios</p>
-              <h1 className="text-base sm:text-xl font-extrabold text-primary leading-tight">GST Reconciliation & Audit Tool</h1>
+              <span className="text-base sm:text-xl font-extrabold text-primary leading-tight">GST Reconciliation & Audit Tool</span>
             </div>
           </div>
 

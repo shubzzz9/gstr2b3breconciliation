@@ -121,7 +121,7 @@ const AuthModal = ({ onClose, onSuccess }: AuthModalProps) => {
           </form>
 
           <div className="mt-4 p-2.5 bg-secondary rounded-lg text-xs text-muted-foreground text-center">
-            <strong>🎁 Free trial:</strong> Get 10 free exports after signing up!
+            <strong>🎁 Free trial:</strong> <strong>🎁 Free trial:</strong> Get 5 free exports after signing up!
           </div>
 
           <button onClick={onClose} className="btn-tool bg-secondary text-foreground border border-border hover:bg-muted w-full mt-3">

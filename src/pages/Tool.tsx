@@ -82,7 +82,7 @@ const Tool = () => {
 
   // Usage
   const [exportCount, setExportCount] = useState(0);
-  const [maxExports, setMaxExports] = useState(10);
+  const [maxExports, setMaxExports] = useState(5);
   const [showPaywall, setShowPaywall] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [pendingDownload, setPendingDownload] = useState<{ type: string; fn: () => void } | null>(null);
@@ -313,7 +313,7 @@ const Tool = () => {
           )}
           {!user && (
             <div className="flex items-center gap-3 text-sm">
-              <span className="bg-white/20 px-2 py-1 rounded text-xs">🎁 10 free exports on signup</span>
+              <span className="bg-white/20 px-2 py-1 rounded text-xs"><span className="bg-white/20 px-2 py-1 rounded text-xs">🎁 5 free exports on signup</span></span>
             </div>
           )}
         </div>
@@ -752,7 +752,7 @@ const Tool = () => {
                       <div>• Fig Not Matched — <strong>{diagData.figNotMatched?.length || 0}</strong> rows</div>
                       <div>• Summary — category totals</div>
                     </div>
-                    <button onClick={() => handleDownload('file3', () => downloadFile3(diagData, recoRows || [], (recoRows as any)?._possibleMatchPairs || []))} className="btn-tool bg-secondary text-foreground border border-border hover:bg-muted">💾 Download</button>
+                    <button onClick={() => handleDownload('file3', () => downloadFile3(diagData, recoRows || [], (recoRows as any)?._possibleMatchPairs || []))} className="btn-tool bg-primary text-primary-foreground hover:opacity-90">💾 Download</button>
                   </div>
                 )}
                 {mode === 'prtally' && auditResult && (
@@ -813,7 +813,7 @@ const Tool = () => {
               </details>
               <details className="group">
                 <summary className="font-semibold text-foreground cursor-pointer hover:text-primary">Is this GST reconciliation tool free?</summary>
-                <p className="mt-1 pl-2">Yes, the tool offers 10 free exports after signup. You can upload files, process, and view results without creating an account. Signup is only needed to download the reconciled Excel report.</p>
+                <p className="mt-1 pl-2"><p className="mt-1 pl-2">Yes, the tool offers 5 free exports after signup. You can upload files, process, and view results without creating an account. Signup is only needed to download the reconciled Excel report.</p> You can upload files, process, and view results without creating an account. Signup is only needed to download the reconciled Excel report.</p>
               </details>
               <details className="group">
                 <summary className="font-semibold text-foreground cursor-pointer hover:text-primary">Is my data safe with this online GST tool?</summary>

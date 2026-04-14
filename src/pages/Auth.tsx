@@ -154,7 +154,7 @@ const Auth = () => {
           </form>
 
           <div className="mt-6 p-3 bg-secondary rounded-lg text-xs text-muted-foreground text-center">
-            <strong>🎁 Free trial:</strong> Get 10 free exports after signing up!
+            <strong>🎁 Free trial:</strong> <strong>🎁 Free trial:</strong> Get 5 free exports after signing up!
           </div>
         </div>
       </div>

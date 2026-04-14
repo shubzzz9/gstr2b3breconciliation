@@ -7,7 +7,7 @@ const Footer = () => {
           <span className="flex items-center gap-1">⚡ Instant Results</span>
           <span className="flex items-center gap-1">🔒 100% Secure — processed in-browser</span>
           <span className="flex items-center gap-1">🎯 Smart Matching</span>
-          <span className="flex items-center gap-1">🎁 10 Free Exports</span>
+          <span className="flex items-center gap-1"><span className="flex items-center gap-1">🎁 5 Free Exports</span></span>
         </div>
 
         <div className="border-t border-border pt-6">

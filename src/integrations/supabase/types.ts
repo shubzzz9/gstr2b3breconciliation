@@ -179,23 +179,18 @@ export type Database = {
       admin_get_all_profiles: {
         Args: never
         Returns: {
-          access_expires_at: string | null
+          access_expires_at: string
           access_mode: string
           created_at: string
-          full_name: string | null
+          email: string
+          full_name: string
           id: string
           is_blocked: boolean
           max_exports: number
-          phone: string | null
+          phone: string
           updated_at: string
           user_id: string
         }[]
-        SetofOptions: {
-          from: "*"
-          to: "profiles"
-          isOneToOne: false
-          isSetofReturn: true
-        }
       }
       admin_set_access_mode: {
         Args: {

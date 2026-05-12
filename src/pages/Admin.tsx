@@ -15,6 +15,7 @@ type Profile = {
   user_id: string;
   full_name: string | null;
   phone: string | null;
+  email: string | null;
   is_blocked: boolean;
   max_exports: number;
   access_mode: string;
@@ -222,6 +223,7 @@ const Admin = () => {
                   <thead>
                     <tr className="bg-secondary">
                       <th className="p-2 text-left border border-border text-xs">Name</th>
+                      <th className="p-2 text-left border border-border text-xs">Email</th>
                       <th className="p-2 text-left border border-border text-xs">User ID</th>
                       <th className="p-2 text-left border border-border text-xs">Phone</th>
                       <th className="p-2 text-center border border-border text-xs">Access Mode</th>
@@ -238,6 +240,7 @@ const Admin = () => {
                       return (
                         <tr key={p.id} className="hover:bg-muted/50">
                           <td className="p-2 border border-border font-medium">{p.full_name || '—'}</td>
+                          <td className="p-2 border border-border text-xs">{p.email || '—'}</td>
                           <td className="p-2 border border-border text-xs font-mono text-muted-foreground">{p.user_id.slice(0, 8)}...</td>
                           <td className="p-2 border border-border text-xs">{p.phone || '—'}</td>
                           <td className="p-2 border border-border text-center">
@@ -312,7 +315,7 @@ const Admin = () => {
                       );
                     })}
                     {profiles.length === 0 && (
-                      <tr><td colSpan={9} className="p-8 text-center text-muted-foreground border border-border">No users yet</td></tr>
+                      <tr><td colSpan={10} className="p-8 text-center text-muted-foreground border border-border">No users yet</td></tr>
                     )}
                   </tbody>
                 </table>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -168,6 +169,15 @@ const Admin = () => {
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
+      <Helmet>
+        <title>Admin Dashboard | GST Reconciliation Tool</title>
+        <meta name="description" content="Internal admin dashboard for managing users, exports, and abuse signals." />
+        <meta name="robots" content="noindex, nofollow" />
+        <link rel="canonical" href="https://gstr2b3breconciliation.lovable.app/admin" />
+        <meta property="og:title" content="Admin Dashboard | GST Reconciliation Tool" />
+        <meta property="og:description" content="Internal admin dashboard." />
+        <meta property="og:url" content="https://gstr2b3breconciliation.lovable.app/admin" />
+      </Helmet>
       <div className="max-w-[1200px] mx-auto">
         {/* Header */}
         <div className="gradient-header text-primary-foreground p-5 rounded-t-xl flex items-center justify-between">

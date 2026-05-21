@@ -1,0 +1,8 @@
+# GSTR-2B Reconciliation Tool
+
+> Free online tool by TechBharat Studios to reconcile Tally or Purchase Register data with GSTR-2B downloaded from the GST portal. Auto-detects columns, matches invoices by GSTIN, and generates styled Excel reports — all processed in the browser.
+
+## Pages
+
+- [Home / Reconciliation Tool](/): Upload Tally and GSTR-2B Excel files, run smart invoice matching, view results, and download a color-coded reconciliation Excel report. 5 free downloads.
+- [Sign in / Sign up](/auth): Email or Google authentication. Required only to download reports — uploading and previewing results works without an account.

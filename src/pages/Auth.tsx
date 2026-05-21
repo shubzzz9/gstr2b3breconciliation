@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Navigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { lovable } from '@/integrations/lovable/index';
 
 const Auth = () => {
@@ -56,6 +57,14 @@ const Auth = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-6">
+      <Helmet>
+        <title>Sign in or Sign up | GST Reconciliation Tool</title>
+        <meta name="description" content="Sign in or create a free account to download reconciled GSTR-2B Excel reports. Email or Google authentication." />
+        <link rel="canonical" href="https://gstr2b3breconciliation.lovable.app/auth" />
+        <meta property="og:title" content="Sign in or Sign up | GST Reconciliation Tool" />
+        <meta property="og:description" content="Sign in or create a free account to download reconciled GSTR-2B Excel reports." />
+        <meta property="og:url" content="https://gstr2b3breconciliation.lovable.app/auth" />
+      </Helmet>
       <div className="w-full max-w-md">
         <div className="gradient-header text-primary-foreground p-6 rounded-t-xl text-center">
           <h1 className="text-2xl font-bold">🧾 GST Reconciliation & Audit Tool</h1>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Navigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { lovable } from '@/integrations/lovable/index';
 
 const Auth = () => {

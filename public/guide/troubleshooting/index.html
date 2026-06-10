@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en-IN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="google-site-verification" content="vHha4HXsLTJF0AOxRfCNE1fv0ZBLcyK1CjNSOeKOyrw" />
+    <title>Troubleshooting GST Reconciliation Mismatches</title>
+    <meta name="description" content="Fix common GST reconciliation mismatches: invoices missing from GSTR-2B, books mismatches, GSTIN typos, tax differences, and column detection issues." />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://gstr2b3breconciliation.lovable.app/guide/troubleshooting/" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Troubleshooting GST Reconciliation Mismatches" />
+    <meta property="og:description" content="Practical fixes for missing invoices, invoice number mismatches, tax differences, and column detection problems." />
+    <meta property="og:url" content="https://gstr2b3breconciliation.lovable.app/guide/troubleshooting/" />
+    <meta name="twitter:card" content="summary" />
+    <style>:root{--ink:#152536;--muted:#5b6b7c;--line:#d8e1ea;--brand:#1f6f9f;--soft:#f3f8fb}*{box-sizing:border-box}body{margin:0;font:17px/1.65 system-ui,-apple-system,Segoe UI,sans-serif;color:var(--ink);background:#fff}header,main,footer{max-width:920px;margin:0 auto;padding:24px}header{border-bottom:1px solid var(--line)}a{color:var(--brand);font-weight:650}h1{font-size:clamp(2rem,4vw,3.2rem);line-height:1.1;margin:24px 0 16px}h2{font-size:1.45rem;margin-top:34px}.intro{color:var(--muted);font-size:1.08rem}.cta,nav.guides{background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:18px;margin:30px 0}footer{color:var(--muted);border-top:1px solid var(--line);font-size:.95rem}</style>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Troubleshooting GST Reconciliation Mismatches","description":"Fix common GST reconciliation mismatches: invoices missing from GSTR-2B, books mismatches, GSTIN typos, tax differences, and column detection issues.","author":{"@type":"Organization","name":"TechBharat Studios"},"publisher":{"@type":"Organization","name":"TechBharat Studios"},"mainEntityOfPage":"https://gstr2b3breconciliation.lovable.app/guide/troubleshooting/","datePublished":"2026-06-10","dateModified":"2026-06-10"}</script>
+  </head>
+  <body>
+    <header><a href="/">← Open free GST reconciliation tool</a></header>
+    <main><article>
+      <h1>Troubleshooting Reconciliation Mismatches</h1>
+      <p class="intro">Most GST reconciliation problems follow a few patterns. Use this checklist to identify the cause and decide the next action before filing GSTR-3B.</p>
+      <h2>Invoice missing from GSTR-2B</h2>
+      <p><strong>Cause:</strong> the supplier has not filed GSTR-1 for that period, filed it late, or reported the invoice with incorrect buyer GSTIN.</p>
+      <p><strong>Fix:</strong> contact the supplier, ask them to include or amend the invoice, and claim ITC in the month it appears in GSTR-2B.</p>
+      <h2>Invoice in 2B but not in books</h2>
+      <p><strong>Cause:</strong> the supplier reported the invoice but your team has not booked the purchase, or it was booked under a different vendor ledger.</p>
+      <p><strong>Fix:</strong> locate the original invoice, book it in the correct period if valid, and re-run reconciliation.</p>
+      <h2>Invoice number does not match</h2>
+      <p><strong>Cause:</strong> prefixes, leading zeros, slashes, or financial-year suffixes are formatted differently in GSTR-2B and Tally.</p>
+      <p><strong>Fix:</strong> compare normalised invoice numbers and review possible matches instead of relying only on exact text matching.</p>
+      <h2>Taxable value or tax amount differs</h2>
+      <p><strong>Cause:</strong> rounding, freight, discount treatment, or HSN tax slab differences can create mismatches in taxable value, IGST, CGST, or SGST.</p>
+      <p><strong>Fix:</strong> compare the original invoice with both records. Correct your books if your entry is wrong, or ask the supplier to amend their return if they reported incorrectly.</p>
+      <h2>Column detection problems</h2>
+      <p><strong>Cause:</strong> merged cells, blank rows before headers, or non-standard column names may stop automated tools from detecting the right fields.</p>
+      <p><strong>Fix:</strong> keep the header row at the top, unmerge cells, and use clear headings such as GSTIN, Invoice No, Invoice Date, Taxable Value, IGST, CGST, and SGST.</p>
+      <div class="cta"><strong>Diagnose faster:</strong> <a href="/">run your files through the GST reconciliation tool</a> to see matched, missing, and mismatched invoices.</div>
+      <nav class="guides" aria-label="Related guides"><strong>Related guides</strong><ul><li><a href="/guide/gst-reconciliation/">Complete GST Reconciliation Guide</a></li><li><a href="/guide/gstr-2b-vs-tally/">GSTR-2B vs Tally</a></li><li><a href="/guide/faq/">GST Reconciliation FAQ</a></li></ul></nav>
+    </article></main>
+    <footer>© TechBharat Studios · GSTR-2B Reconciliation Tool</footer>
+  </body>
+</html>

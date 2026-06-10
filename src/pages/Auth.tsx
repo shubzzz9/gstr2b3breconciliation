@@ -60,6 +60,7 @@ const Auth = () => {
       <Helmet>
         <title>Sign in or Sign up | GST Reconciliation Tool</title>
         <meta name="description" content="Sign in or create a free account to download reconciled GSTR-2B Excel reports. Email or Google authentication." />
+        <meta name="robots" content="noindex, nofollow" />
         <link rel="canonical" href="https://gstr2b3breconciliation.lovable.app/auth" />
         <meta property="og:title" content="Sign in or Sign up | GST Reconciliation Tool" />
         <meta property="og:description" content="Sign in or create a free account to download reconciled GSTR-2B Excel reports." />

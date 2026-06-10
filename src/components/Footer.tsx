@@ -13,10 +13,10 @@ const Footer = () => {
         <nav aria-label="Guides" className="border-t border-border pt-5 pb-5">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 text-center md:text-left">Guides</p>
           <ul className="flex flex-wrap justify-center md:justify-start gap-x-5 gap-y-2 text-xs">
-            <li><a href="/guide/gst-reconciliation" className="text-foreground/80 hover:text-primary">GST Reconciliation Guide</a></li>
-            <li><a href="/guide/gstr-2b-vs-tally" className="text-foreground/80 hover:text-primary">GSTR-2B vs Tally</a></li>
-            <li><a href="/guide/faq" className="text-foreground/80 hover:text-primary">FAQ</a></li>
-            <li><a href="/guide/troubleshooting" className="text-foreground/80 hover:text-primary">Troubleshooting</a></li>
+            <li><a href="/guide/gst-reconciliation/" className="text-foreground/80 hover:text-primary">GST Reconciliation Guide</a></li>
+            <li><a href="/guide/gstr-2b-vs-tally/" className="text-foreground/80 hover:text-primary">GSTR-2B vs Tally</a></li>
+            <li><a href="/guide/faq/" className="text-foreground/80 hover:text-primary">FAQ</a></li>
+            <li><a href="/guide/troubleshooting/" className="text-foreground/80 hover:text-primary">Troubleshooting</a></li>
           </ul>
         </nav>
 

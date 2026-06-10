@@ -5,7 +5,6 @@
 ## Pages
 
 - [Home / Reconciliation Tool](/): Upload Tally and GSTR-2B Excel files, run smart invoice matching, view results, and download a color-coded reconciliation Excel report.
-- [Sign in / Sign up](/auth): Email or Google authentication. Required only to download reports.
 - [GST Reconciliation Guide](/guide/gst-reconciliation): What GST reconciliation is, why it matters for ITC, and step-by-step process.
 - [GSTR-2B vs Tally](/guide/gstr-2b-vs-tally): Differences, common mismatch reasons, and recommended matching logic.
 - [FAQ](/guide/faq): Common questions about GSTR-2B, ITC, file formats and data privacy.

@@ -169,6 +169,27 @@ const Admin = () => {
     }
   };
 
+  const overview = profiles.map(profile => {
+    const userExports = exports.filter(e => e.user_id === profile.user_id);
+    const userDevices = devices.filter(d => d.user_id === profile.user_id);
+    const ips = Array.from(new Set([
+      ...userExports.map(e => e.ip_address),
+      ...userDevices.map(d => d.ip_address),
+    ].filter(Boolean) as string[]));
+    return { profile, exports: userExports, devices: userDevices, ips };
+  });
+
+  const q = search.trim().toLowerCase();
+  const filteredOverview = q
+    ? overview.filter(r =>
+        [r.profile.full_name, r.profile.email, r.profile.user_id, r.profile.phone, ...r.ips, ...r.devices.map(d => d.fingerprint)]
+          .filter(Boolean)
+          .some(v => String(v).toLowerCase().includes(q))
+      )
+    : overview;
+
+
+
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
       <Helmet>

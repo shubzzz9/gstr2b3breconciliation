@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { Shield, Users, FileDown, Fingerprint, Ban, CheckCircle, ArrowLeft, RefreshCw, Calendar, Hash, Clock } from 'lucide-react';
+import { Shield, Users, FileDown, Fingerprint, Ban, CheckCircle, ArrowLeft, RefreshCw, Calendar, Hash, Clock, Search, ChevronDown, ChevronRight, LayoutList } from 'lucide-react';
 
 type Profile = {
   id: string;
@@ -60,6 +60,8 @@ const Admin = () => {
   const [accessMode, setAccessMode] = useState('exports');
   const [accessExpiry, setAccessExpiry] = useState('');
   const [syncing, setSyncing] = useState(false);
+  const [search, setSearch] = useState('');
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const syncToSheets = async () => {
     setSyncing(true);
@@ -167,6 +169,27 @@ const Admin = () => {
     }
   };
 
+  const overview = profiles.map(profile => {
+    const userExports = exports.filter(e => e.user_id === profile.user_id);
+    const userDevices = devices.filter(d => d.user_id === profile.user_id);
+    const ips = Array.from(new Set([
+      ...userExports.map(e => e.ip_address),
+      ...userDevices.map(d => d.ip_address),
+    ].filter(Boolean) as string[]));
+    return { profile, exports: userExports, devices: userDevices, ips };
+  });
+
+  const q = search.trim().toLowerCase();
+  const filteredOverview = q
+    ? overview.filter(r =>
+        [r.profile.full_name, r.profile.email, r.profile.user_id, r.profile.phone, ...r.ips, ...r.devices.map(d => d.fingerprint)]
+          .filter(Boolean)
+          .some(v => String(v).toLowerCase().includes(q))
+      )
+    : overview;
+
+
+
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
       <Helmet>
@@ -219,12 +242,116 @@ const Admin = () => {
             </CardContent></Card>
           </div>
 
-          <Tabs defaultValue="users">
+          <Tabs defaultValue="overview">
             <TabsList className="mb-4">
+              <TabsTrigger value="overview"><LayoutList className="h-4 w-4 mr-1" /> Overview</TabsTrigger>
               <TabsTrigger value="users"><Users className="h-4 w-4 mr-1" /> Users</TabsTrigger>
               <TabsTrigger value="exports"><FileDown className="h-4 w-4 mr-1" /> Exports</TabsTrigger>
               <TabsTrigger value="devices"><Fingerprint className="h-4 w-4 mr-1" /> Devices</TabsTrigger>
             </TabsList>
+
+            {/* Overview Tab — everything about a user in one place */}
+            <TabsContent value="overview">
+              <div className="relative mb-4 max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name, email, user ID, IP or fingerprint…"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+
+              <div className="space-y-2">
+                {filteredOverview.map(row => {
+                  const isOpen = expanded === row.profile.user_id;
+                  const modeInfo = accessModeLabel(row.profile.access_mode || 'exports');
+                  return (
+                    <Card key={row.profile.id} className="overflow-hidden">
+                      <button
+                        type="button"
+                        className="w-full text-left p-3 flex flex-wrap items-center gap-x-3 gap-y-2 hover:bg-muted/50"
+                        onClick={() => setExpanded(isOpen ? null : row.profile.user_id)}
+                      >
+                        {isOpen ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium truncate">{row.profile.full_name || 'Unnamed user'}</div>
+                          <div className="text-xs text-muted-foreground truncate">{row.profile.email || '—'} · {row.profile.user_id.slice(0, 8)}…</div>
+                        </div>
+                        <Badge variant="outline" className="gap-1"><FileDown className="h-3 w-3" /> {row.exports.length} exports</Badge>
+                        <Badge variant="outline" className="gap-1"><Fingerprint className="h-3 w-3" /> {row.devices.length} devices</Badge>
+                        <Badge variant={modeInfo.color} className="gap-1">{modeInfo.icon} {modeInfo.label} · {row.profile.max_exports}</Badge>
+                        <Badge variant={row.profile.is_blocked ? 'destructive' : 'secondary'}>{row.profile.is_blocked ? 'Blocked' : 'Active'}</Badge>
+                      </button>
+
+                      {isOpen && (
+                        <CardContent className="p-4 pt-0 border-t border-border">
+                          <div className="grid gap-4 md:grid-cols-2 pt-4">
+                            <div>
+                              <div className="text-xs font-semibold mb-2 text-muted-foreground uppercase">Details</div>
+                              <ul className="text-xs space-y-1">
+                                <li><span className="text-muted-foreground">User ID:</span> <span className="font-mono">{row.profile.user_id}</span></li>
+                                <li><span className="text-muted-foreground">Phone:</span> {row.profile.phone || '—'}</li>
+                                <li><span className="text-muted-foreground">Joined:</span> {new Date(row.profile.created_at).toLocaleString()}</li>
+                                <li><span className="text-muted-foreground">Expires:</span> {row.profile.access_expires_at ? new Date(row.profile.access_expires_at).toLocaleString() : '—'}</li>
+                                <li><span className="text-muted-foreground">IPs used:</span> <span className="font-mono">{row.ips.join(', ') || '—'}</span></li>
+                              </ul>
+                              <div className="flex gap-2 mt-3">
+                                <Button size="sm" variant={row.profile.is_blocked ? 'outline' : 'destructive'} className="h-7 text-xs"
+                                  onClick={() => toggleUserBlock(row.profile.user_id, row.profile.is_blocked)}>
+                                  {row.profile.is_blocked ? <><CheckCircle className="h-3 w-3 mr-1" /> Unblock user</> : <><Ban className="h-3 w-3 mr-1" /> Block user</>}
+                                </Button>
+                              </div>
+                            </div>
+
+                            <div>
+                              <div className="text-xs font-semibold mb-2 text-muted-foreground uppercase">Devices</div>
+                              {row.devices.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">No devices tracked</p>
+                              ) : (
+                                <ul className="text-xs space-y-1">
+                                  {row.devices.map(d => (
+                                    <li key={d.id} className="flex items-center justify-between gap-2">
+                                      <span className="font-mono truncate">{d.fingerprint.slice(0, 12)}… · {d.ip_address || 'no IP'} · {d.export_count}x</span>
+                                      <Button size="sm" variant="ghost" className="h-6 px-2 text-xs shrink-0"
+                                        onClick={() => toggleDeviceBlock(d.fingerprint, d.is_blocked)}>
+                                        {d.is_blocked ? 'Unblock' : 'Block'}
+                                      </Button>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+
+                            <div className="md:col-span-2">
+                              <div className="text-xs font-semibold mb-2 text-muted-foreground uppercase">Recent exports</div>
+                              {row.exports.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">No exports yet</p>
+                              ) : (
+                                <ul className="text-xs space-y-1 max-h-48 overflow-y-auto">
+                                  {row.exports.slice(0, 25).map(e => (
+                                    <li key={e.id} className="flex flex-wrap gap-2">
+                                      <span>{new Date(e.created_at).toLocaleString()}</span>
+                                      <Badge variant="outline" className="text-[10px]">{e.export_type}</Badge>
+                                      <span className="font-mono text-muted-foreground">{e.ip_address || '—'}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      )}
+                    </Card>
+                  );
+                })}
+                {filteredOverview.length === 0 && (
+                  <p className="p-8 text-center text-muted-foreground">No matching users</p>
+                )}
+              </div>
+            </TabsContent>
+
+
 
             {/* Users Tab */}
             <TabsContent value="users">

@@ -2,7 +2,7 @@ import type { ArticleData } from "./Article";
 
 export const guideReconciliation: ArticleData = {
   slug: "guide/gst-reconciliation",
-  title: "Complete Guide to GST Reconciliation (2026) | TechBharat Studios",
+  title: "GST Reconciliation Guide (2026) | TechBharat Studios",
   description: "Step-by-step guide to GST reconciliation in India: what it is, why it matters for ITC, and how to reconcile GSTR-2B with your books quickly.",
   h1: "Complete Guide to GST Reconciliation",
   intro: "GST reconciliation is the monthly process of matching the purchase invoices in your books (Tally or Purchase Register) against GSTR-2B issued by the GST portal. Correct reconciliation protects your Input Tax Credit (ITC), reduces notices, and keeps GSTR-3B filing clean.",

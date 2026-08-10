@@ -43,6 +43,7 @@ const Article = ({ data }: { data: ArticleData }) => {
         <meta property="og:description" content={data.description} />
         <meta property="og:url" content={url} />
         <meta property="og:type" content="article" />
+        <meta property="og:site_name" content="TechBharat Studios" />
         <meta name="twitter:title" content={data.title} />
         <meta name="twitter:description" content={data.description} />
         <script type="application/ld+json">{JSON.stringify(articleSchema)}</script>

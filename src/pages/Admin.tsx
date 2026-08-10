@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { Shield, Users, FileDown, Fingerprint, Ban, CheckCircle, ArrowLeft, RefreshCw, Calendar, Hash, Clock } from 'lucide-react';
+import { Shield, Users, FileDown, Fingerprint, Ban, CheckCircle, ArrowLeft, RefreshCw, Calendar, Hash, Clock, Search, ChevronDown, ChevronRight, LayoutList } from 'lucide-react';
 
 type Profile = {
   id: string;
@@ -60,6 +60,8 @@ const Admin = () => {
   const [accessMode, setAccessMode] = useState('exports');
   const [accessExpiry, setAccessExpiry] = useState('');
   const [syncing, setSyncing] = useState(false);
+  const [search, setSearch] = useState('');
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const syncToSheets = async () => {
     setSyncing(true);

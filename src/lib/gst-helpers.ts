@@ -18,6 +18,42 @@ export const TALLY_SINGLE_ROWS = [
   { id: 'date', label: 'Date Column', required: true, guess: ['date', 'bill date', 'invoice date'] },
 ];
 
+// Used only by Option 2 (purchase file vs GSTR-2B) to spot debit / credit notes
+export const TALLY_NOTE_ROW = {
+  id: 'noteType',
+  label: 'Voucher / Note Type Column (optional)',
+  required: false,
+  guess: ['voucher type', 'vch type', 'vou type', 'vchtype', 'document type', 'doc type', 'nature of transaction', 'transaction type', 'type'],
+};
+
+export const CREDIT_NOTE_KW = ['credit note', 'cr note', 'crnote', 'c/note', 'credit memo', 'purchase return', 'goods return', 'return'];
+export const DEBIT_NOTE_KW = ['debit note', 'dr note', 'drnote', 'd/note', 'debit memo'];
+
+export type DocType = 'invoice' | 'credit_note' | 'debit_note';
+
+/** Classify a voucher/document-type cell value. Returns null when it is not a note. */
+export function classifyDocTypeFromText(v: any): DocType | null {
+  const s = String(v || '').toLowerCase().trim();
+  if (!s) return null;
+  if (DEBIT_NOTE_KW.some(k => s.includes(k))) return 'debit_note';
+  if (CREDIT_NOTE_KW.some(k => s.includes(k))) return 'credit_note';
+  return null;
+}
+
+/** Classify the "Note type" column of the GSTR-2B B2B-CDNR sheet (C = credit, D = debit). */
+export function classifyPortalNoteType(v: any): DocType {
+  const s = String(v || '').toLowerCase().trim();
+  if (s === 'd' || s.includes('debit')) return 'debit_note';
+  return 'credit_note';
+}
+
+export const DOC_TYPE_LABEL: Record<string, string> = {
+  invoice: 'Invoice',
+  credit_note: 'Credit Note',
+  debit_note: 'Debit Note',
+};
+
+
 export const TALLY_MULTI_ROWS = [
   { id: 'taxable', label: 'Taxable Value columns', required: true, guess: ['taxable', 'purchase @', 'purchase@'], extMatch: (h: string) => /purchase\s*@/i.test(h) || /amount\s*\d+%/i.test(h) },
   { id: 'igst', label: 'IGST columns', required: false, guess: ['igst', 'integrated'] },

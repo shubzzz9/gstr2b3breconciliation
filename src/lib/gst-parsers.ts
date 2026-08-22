@@ -2,7 +2,8 @@
 import XLSX from 'xlsx-js-style';
 import {
   cleanString, normalise, numVal, excelSerialToDate,
-  TALLY_SINGLE_ROWS, TALLY_MULTI_ROWS, nv4
+  TALLY_SINGLE_ROWS, TALLY_MULTI_ROWS, TALLY_NOTE_ROW, nv4,
+  classifyDocTypeFromText, classifyPortalNoteType, type DocType
 } from './gst-helpers';
 
 // ═══════════════════════════════════════════════════════════
@@ -55,6 +56,7 @@ export function scanTally(wb: any): TallyScanResult {
 
   const singleGuesses: Record<string, number> = {};
   TALLY_SINGLE_ROWS.forEach(row => { singleGuesses[row.id] = guessCol(row.guess); });
+  singleGuesses[TALLY_NOTE_ROW.id] = guessCol(TALLY_NOTE_ROW.guess);
 
   const multiGuesses: Record<string, number[]> = {};
   TALLY_MULTI_ROWS.forEach(row => { multiGuesses[row.id] = guessCols(row.guess, row.extMatch); });
@@ -76,7 +78,12 @@ export interface TallyMapping {
   cgst: number[];
   sgst: number[];
   cess: number[];
+  /** Optional column holding the voucher / document type (Option 2 only) */
+  noteType?: number;
+  /** When true, rows are classified as invoice / credit note / debit note */
+  classifyNotes?: boolean;
 }
+
 
 export function processTally(m: TallyMapping) {
   const grouped: Record<string, any> = {};
@@ -96,11 +103,25 @@ export function processTally(m: TallyMapping) {
     const voucher = m.voucher >= 0 ? normalise(String(r[m.voucher] || '')) : '';
     const hasInv = invoiceNum !== '', hasGST = gstin !== '', hasVou = voucher !== '';
 
+    // Document type classification (Option 2 only)
+    let docType: DocType = 'invoice';
+    if (m.classifyNotes) {
+      const noteCol = m.noteType ?? -1;
+      const byText = noteCol >= 0 ? classifyDocTypeFromText(r[noteCol]) : null;
+      if (byText) docType = byText;
+      else {
+        const rowTaxable = m.taxable.reduce((s, c) => s + numVal(r[c]), 0);
+        const rowTax = [...m.igst, ...m.cgst, ...m.sgst].reduce((s, c) => s + numVal(r[c]), 0);
+        if (rowTaxable < 0 || (rowTaxable === 0 && rowTax < 0)) docType = 'debit_note';
+      }
+    }
+    const dtPrefix = docType === 'invoice' ? '' : `${docType}|||`;
+
     let key: string;
-    if (hasInv && hasGST) key = `${invoiceNum}|||${gstin}`;
-    else if (!hasGST && hasInv) key = `${invoiceNum}|||__NO_GSTIN__`;
-    else if (!hasInv && hasGST) key = `__NO_INV__|||${gstin}|||V${hasVou ? voucher : 'UNK' + (++unkCounter)}`;
-    else key = `__NO_INV__|||__NO_GSTIN__|||V${hasVou ? voucher : 'UNK' + (++unkCounter)}`;
+    if (hasInv && hasGST) key = `${dtPrefix}${invoiceNum}|||${gstin}`;
+    else if (!hasGST && hasInv) key = `${dtPrefix}${invoiceNum}|||__NO_GSTIN__`;
+    else if (!hasInv && hasGST) key = `${dtPrefix}__NO_INV__|||${gstin}|||V${hasVou ? voucher : 'UNK' + (++unkCounter)}`;
+    else key = `${dtPrefix}__NO_INV__|||__NO_GSTIN__|||V${hasVou ? voucher : 'UNK' + (++unkCounter)}`;
 
     if (!hasGST && hasInv) blankGstinRows.push({ supplier, invoiceNum, gstin: '', voucher });
     if (!hasInv) blankInvoiceRows.push({ supplier, invoiceNum: '', gstin, voucher });
@@ -111,16 +132,29 @@ export function processTally(m: TallyMapping) {
         invoiceNum: invoiceNum || '(blank)',
         invoiceDate: excelSerialToDate(r[m.date]),
         taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0,
+        docType,
       };
     }
+
     m.taxable.forEach(c => { grouped[key].taxable += numVal(r[c]); });
     m.igst.forEach(c => { grouped[key].igst += numVal(r[c]); });
     m.cgst.forEach(c => { grouped[key].cgst += numVal(r[c]); });
     m.sgst.forEach(c => { grouped[key].sgst += numVal(r[c]); });
     if (m.cess) m.cess.forEach(c => { grouped[key].cess += numVal(r[c]); });
   }
-  return { rows: Object.values(grouped), blankGstinRows, blankInvoiceRows };
+  const rows = Object.values(grouped) as any[];
+  // Notes always reduce ITC in the books → normalise them to a negative sign
+  if (m.classifyNotes) {
+    rows.forEach(row => {
+      if (row.docType === 'invoice') return;
+      ['taxable', 'igst', 'cgst', 'sgst', 'cess'].forEach(k => {
+        row[k] = -Math.abs(numVal(row[k]));
+      });
+    });
+  }
+  return { rows, blankGstinRows, blankInvoiceRows };
 }
+
 
 // ═══════════════════════════════════════════════════════════
 // GSTR-2B SCANNING & PARSING
@@ -137,8 +171,9 @@ export interface GSTRScanResult {
   headerFallback: boolean;
 }
 
-export function scanGSTR2B(wb: any): GSTRScanResult {
-  const ws = wb.Sheets[wb.SheetNames[0]];
+export function scanGSTR2B(wb: any, sheetName?: string): GSTRScanResult {
+  const sName = sheetName && wb.Sheets[sheetName] ? sheetName : wb.SheetNames[0];
+  const ws = wb.Sheets[sName];
   const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true }) as any[][];
   let hdr1 = -1;
   let headerFallback = false;
@@ -150,10 +185,11 @@ export function scanGSTR2B(wb: any): GSTRScanResult {
     for (let i = 0; i < Math.min(20, raw.length); i++) {
       if (!raw[i]) continue;
       const rowStr = raw[i].map((c: any) => String(c || '').toLowerCase()).join('|');
-      const hits = ['gstin', 'invoice', 'taxable', 'supplier'].filter(kw => rowStr.includes(kw)).length;
+      const hits = ['gstin', 'invoice', 'note', 'taxable', 'supplier'].filter(kw => rowStr.includes(kw)).length;
       if (hits >= 2) { hdr1 = i; headerFallback = true; break; }
     }
   }
+
   if (hdr1 === -1) {
     for (let i = 0; i < Math.min(20, raw.length); i++) {
       if (raw[i] && raw[i].some((c: any) => c && (String(c).toLowerCase().includes('gstin') || String(c).toLowerCase().includes('gstn')))) {

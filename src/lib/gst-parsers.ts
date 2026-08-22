@@ -102,11 +102,25 @@ export function processTally(m: TallyMapping) {
     const voucher = m.voucher >= 0 ? normalise(String(r[m.voucher] || '')) : '';
     const hasInv = invoiceNum !== '', hasGST = gstin !== '', hasVou = voucher !== '';
 
+    // Document type classification (Option 2 only)
+    let docType: DocType = 'invoice';
+    if (m.classifyNotes) {
+      const noteCol = m.noteType ?? -1;
+      const byText = noteCol >= 0 ? classifyDocTypeFromText(r[noteCol]) : null;
+      if (byText) docType = byText;
+      else {
+        const rowTaxable = m.taxable.reduce((s, c) => s + numVal(r[c]), 0);
+        const rowTax = [...m.igst, ...m.cgst, ...m.sgst].reduce((s, c) => s + numVal(r[c]), 0);
+        if (rowTaxable < 0 || (rowTaxable === 0 && rowTax < 0)) docType = 'debit_note';
+      }
+    }
+    const dtPrefix = docType === 'invoice' ? '' : `${docType}|||`;
+
     let key: string;
-    if (hasInv && hasGST) key = `${invoiceNum}|||${gstin}`;
-    else if (!hasGST && hasInv) key = `${invoiceNum}|||__NO_GSTIN__`;
-    else if (!hasInv && hasGST) key = `__NO_INV__|||${gstin}|||V${hasVou ? voucher : 'UNK' + (++unkCounter)}`;
-    else key = `__NO_INV__|||__NO_GSTIN__|||V${hasVou ? voucher : 'UNK' + (++unkCounter)}`;
+    if (hasInv && hasGST) key = `${dtPrefix}${invoiceNum}|||${gstin}`;
+    else if (!hasGST && hasInv) key = `${dtPrefix}${invoiceNum}|||__NO_GSTIN__`;
+    else if (!hasInv && hasGST) key = `${dtPrefix}__NO_INV__|||${gstin}|||V${hasVou ? voucher : 'UNK' + (++unkCounter)}`;
+    else key = `${dtPrefix}__NO_INV__|||__NO_GSTIN__|||V${hasVou ? voucher : 'UNK' + (++unkCounter)}`;
 
     if (!hasGST && hasInv) blankGstinRows.push({ supplier, invoiceNum, gstin: '', voucher });
     if (!hasInv) blankInvoiceRows.push({ supplier, invoiceNum: '', gstin, voucher });
@@ -117,8 +131,10 @@ export function processTally(m: TallyMapping) {
         invoiceNum: invoiceNum || '(blank)',
         invoiceDate: excelSerialToDate(r[m.date]),
         taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0,
+        docType,
       };
     }
+
     m.taxable.forEach(c => { grouped[key].taxable += numVal(r[c]); });
     m.igst.forEach(c => { grouped[key].igst += numVal(r[c]); });
     m.cgst.forEach(c => { grouped[key].cgst += numVal(r[c]); });

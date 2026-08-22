@@ -2,7 +2,8 @@
 import XLSX from 'xlsx-js-style';
 import {
   cleanString, normalise, numVal, excelSerialToDate,
-  TALLY_SINGLE_ROWS, TALLY_MULTI_ROWS, nv4
+  TALLY_SINGLE_ROWS, TALLY_MULTI_ROWS, TALLY_NOTE_ROW, nv4,
+  classifyDocTypeFromText, classifyPortalNoteType, type DocType
 } from './gst-helpers';
 
 // ═══════════════════════════════════════════════════════════

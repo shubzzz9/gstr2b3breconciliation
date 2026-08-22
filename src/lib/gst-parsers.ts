@@ -171,8 +171,9 @@ export interface GSTRScanResult {
   headerFallback: boolean;
 }
 
-export function scanGSTR2B(wb: any): GSTRScanResult {
-  const ws = wb.Sheets[wb.SheetNames[0]];
+export function scanGSTR2B(wb: any, sheetName?: string): GSTRScanResult {
+  const sName = sheetName && wb.Sheets[sheetName] ? sheetName : wb.SheetNames[0];
+  const ws = wb.Sheets[sName];
   const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true }) as any[][];
   let hdr1 = -1;
   let headerFallback = false;
@@ -184,10 +185,11 @@ export function scanGSTR2B(wb: any): GSTRScanResult {
     for (let i = 0; i < Math.min(20, raw.length); i++) {
       if (!raw[i]) continue;
       const rowStr = raw[i].map((c: any) => String(c || '').toLowerCase()).join('|');
-      const hits = ['gstin', 'invoice', 'taxable', 'supplier'].filter(kw => rowStr.includes(kw)).length;
+      const hits = ['gstin', 'invoice', 'note', 'taxable', 'supplier'].filter(kw => rowStr.includes(kw)).length;
       if (hits >= 2) { hdr1 = i; headerFallback = true; break; }
     }
   }
+
   if (hdr1 === -1) {
     for (let i = 0; i < Math.min(20, raw.length); i++) {
       if (raw[i] && raw[i].some((c: any) => c && (String(c).toLowerCase().includes('gstin') || String(c).toLowerCase().includes('gstn')))) {

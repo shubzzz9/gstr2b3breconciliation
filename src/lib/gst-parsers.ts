@@ -55,6 +55,7 @@ export function scanTally(wb: any): TallyScanResult {
 
   const singleGuesses: Record<string, number> = {};
   TALLY_SINGLE_ROWS.forEach(row => { singleGuesses[row.id] = guessCol(row.guess); });
+  singleGuesses[TALLY_NOTE_ROW.id] = guessCol(TALLY_NOTE_ROW.guess);
 
   const multiGuesses: Record<string, number[]> = {};
   TALLY_MULTI_ROWS.forEach(row => { multiGuesses[row.id] = guessCols(row.guess, row.extMatch); });
@@ -76,7 +77,12 @@ export interface TallyMapping {
   cgst: number[];
   sgst: number[];
   cess: number[];
+  /** Optional column holding the voucher / document type (Option 2 only) */
+  noteType?: number;
+  /** When true, rows are classified as invoice / credit note / debit note */
+  classifyNotes?: boolean;
 }
+
 
 export function processTally(m: TallyMapping) {
   const grouped: Record<string, any> = {};

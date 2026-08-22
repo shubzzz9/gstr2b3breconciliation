@@ -141,8 +141,19 @@ export function processTally(m: TallyMapping) {
     m.sgst.forEach(c => { grouped[key].sgst += numVal(r[c]); });
     if (m.cess) m.cess.forEach(c => { grouped[key].cess += numVal(r[c]); });
   }
-  return { rows: Object.values(grouped), blankGstinRows, blankInvoiceRows };
+  const rows = Object.values(grouped) as any[];
+  // Notes always reduce ITC in the books → normalise them to a negative sign
+  if (m.classifyNotes) {
+    rows.forEach(row => {
+      if (row.docType === 'invoice') return;
+      ['taxable', 'igst', 'cgst', 'sgst', 'cess'].forEach(k => {
+        row[k] = -Math.abs(numVal(row[k]));
+      });
+    });
+  }
+  return { rows, blankGstinRows, blankInvoiceRows };
 }
+
 
 // ═══════════════════════════════════════════════════════════
 // GSTR-2B SCANNING & PARSING

@@ -169,7 +169,12 @@ export interface GSTRScanResult {
   sanityWarnings: string[];
   dataStartIdx: number;
   headerFallback: boolean;
+  /** Header name of the CDNR "Note type" column (C / D), when present */
+  noteTypeCol?: string | null;
+  /** Sheet this scan came from */
+  sheetName?: string;
 }
+
 
 export function scanGSTR2B(wb: any, sheetName?: string): GSTRScanResult {
   const sName = sheetName && wb.Sheets[sheetName] ? sheetName : wb.SheetNames[0];
@@ -214,10 +219,10 @@ export function scanGSTR2B(wb: any, sheetName?: string): GSTRScanResult {
   const GSTR_FUZZY_KW: Record<string, string[]> = {
     'GSTIN of supplier': ['gstin of supplier', 'gstin of supp', 'gstin', 'gst no', 'gst num'],
     'Trade/Legal name': ['trade', 'legal name', 'supplier name', 'party name', 'particulars'],
-    'Invoice number': ['invoice no', 'invoice num', 'bill no', 'bill num'],
-    'Invoice type': ['invoice type', 'inv type'],
-    'Invoice Date': ['invoice date', 'bill date', 'inv date'],
-    'Invoice Value(₹)': ['invoice value', 'inv value', 'bill value', 'inv val'],
+    'Invoice number': ['invoice no', 'invoice num', 'bill no', 'bill num', 'note number', 'note no'],
+    'Invoice type': ['invoice type', 'inv type', 'note supply type'],
+    'Invoice Date': ['invoice date', 'bill date', 'inv date', 'note date'],
+    'Invoice Value(₹)': ['invoice value', 'inv value', 'bill value', 'inv val', 'note value'],
     'Place of supply': ['place of supply', 'place of supp'],
     'Supply Attract Reverse Charge': ['reverse charge', 'rev charge'],
     'Taxable Value (₹)': ['taxable value', 'taxable amt', 'taxable amount'],
@@ -226,6 +231,7 @@ export function scanGSTR2B(wb: any, sheetName?: string): GSTRScanResult {
     'State/UT Tax(₹)': ['state/ut', 'sgst', 'ut tax'],
     'Cess(₹)': ['cess'],
   };
+
 
   const STD_COLS = [
     'GSTIN of supplier', 'Trade/Legal name', 'Invoice number', 'Invoice type',
@@ -311,7 +317,10 @@ export function scanGSTR2B(wb: any, sheetName?: string): GSTRScanResult {
     }
   }
 
-  return { hdrIdx: hdr1, raw, allHeaders: hdrs, detected: det, extraCols, sanityWarnings, dataStartIdx, headerFallback };
+  const noteTypeCol = hdrs.find((h: string) => /note\s*type/i.test(h)) || null;
+
+  return { hdrIdx: hdr1, raw, allHeaders: hdrs, detected: det, extraCols, sanityWarnings, dataStartIdx, headerFallback, noteTypeCol, sheetName: sName };
+
 }
 
 export function parseGSTR2B(scan: GSTRScanResult): any[] {
@@ -359,6 +368,83 @@ export function parseGSTR2B(scan: GSTRScanResult): any[] {
   });
   return groupOrder.map(k => grouped[k]);
 }
+
+// ═══════════════════════════════════════════════════════════
+// GSTR-2B SHEET CLASSIFICATION (B2B vs B2B-CDNR) — Option 2 only
+// ═══════════════════════════════════════════════════════════
+
+export interface GSTR2BSheetMap {
+  b2bSheet: string | null;
+  cdnrSheet: string | null;
+  amendmentSheets: string[];
+  allSheets: string[];
+}
+
+export function classifyGSTR2BSheets(wb: any): GSTR2BSheetMap {
+  const names: string[] = wb?.SheetNames || [];
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  let b2bSheet: string | null = null;
+  let cdnrSheet: string | null = null;
+  const amendmentSheets: string[] = [];
+
+  names.forEach(n => {
+    const k = norm(n);
+    if (k.includes('readme') || k.includes('instruction')) return;
+    const isAmend = /a$/.test(k) && (k.includes('b2b') || k.includes('cdnr'));
+    if (k.includes('cdnr')) {
+      if (isAmend) amendmentSheets.push(n);
+      else if (!cdnrSheet) cdnrSheet = n;
+    } else if (k.includes('b2b')) {
+      if (isAmend) amendmentSheets.push(n);
+      else if (!b2bSheet) b2bSheet = n;
+    }
+  });
+
+  // Fall back to the first sheet when nothing matched (single-sheet exports)
+  if (!b2bSheet && !cdnrSheet) b2bSheet = names[0] || null;
+  else if (!b2bSheet) b2bSheet = null;
+
+  return { b2bSheet, cdnrSheet, amendmentSheets, allSheets: names };
+}
+
+/**
+ * Parse a GSTR-2B CDNR (credit/debit note) sheet into GSTR-2B-shaped rows.
+ * Sign convention: supplier credit note reduces ITC → negative amounts.
+ * Supplier debit note increases ITC → positive amounts.
+ */
+export function parseGSTR2BNotes(scan: GSTRScanResult): any[] {
+  const rows = parseGSTR2B(scan);
+  const { raw, allHeaders: hdrs, dataStartIdx, noteTypeCol } = scan;
+  const noteIdx = noteTypeCol ? hdrs.indexOf(noteTypeCol) : -1;
+
+  // Build a GSTIN||note-no → note type lookup from the raw rows
+  const typeByKey: Record<string, DocType> = {};
+  if (noteIdx >= 0) {
+    const gCol = scan.detected['GSTIN of supplier'] ? hdrs.indexOf(scan.detected['GSTIN of supplier'] as string) : -1;
+    const nCol = scan.detected['Invoice number'] ? hdrs.indexOf(scan.detected['Invoice number'] as string) : -1;
+    for (let i = dataStartIdx; i < raw.length; i++) {
+      const r = raw[i];
+      if (!r) continue;
+      const key = String(gCol >= 0 ? r[gCol] || '' : '').trim() + '||' + String(nCol >= 0 ? r[nCol] || '' : '').trim();
+      typeByKey[key] = classifyPortalNoteType(r[noteIdx]);
+    }
+  }
+
+  const AMT_COLS = ['Invoice Value(₹)', 'Taxable Value (₹)', 'Integrated Tax(₹)', 'Central Tax(₹)', 'State/UT Tax(₹)', 'Cess(₹)'];
+  return rows.map(row => {
+    const key = String(row['GSTIN of supplier'] || '').trim() + '||' + String(row['Invoice number'] || '').trim();
+    const docType: DocType = typeByKey[key] || 'credit_note';
+    const out = { ...row, docType };
+    AMT_COLS.forEach(c => {
+      const v = numVal(out[c]);
+      if (v === 0) { out[c] = out[c] === '' ? '' : 0; return; }
+      out[c] = docType === 'debit_note' ? Math.abs(v) : -Math.abs(v);
+    });
+    return out;
+  });
+}
+
+
 
 // ═══════════════════════════════════════════════════════════
 // COMBINED FILE PARSING

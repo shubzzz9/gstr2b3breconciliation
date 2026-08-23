@@ -432,3 +432,211 @@ export function reconcilePRTally(prResult: any, tallyResult4: any) {
     prRowIndex, tallyRowIndex,
   };
 }
+
+// ═══════════════════════════════════════════════════════════
+// DEBIT / CREDIT NOTE RECONCILIATION (Option 2 only)
+// ═══════════════════════════════════════════════════════════
+
+import { DOC_TYPE_LABEL, type DocType } from './gst-helpers';
+
+const NOTE_TOL = 5;
+
+function buildGSTRNoteRow(g: any, remark: string, extraCols: any[]) {
+  const row = buildGSTRRow(g, remark, extraCols);
+  row['Document Type'] = DOC_TYPE_LABEL[g.docType as string] || 'Credit Note';
+  return row;
+}
+
+function buildOurNoteRow(r: any, remark: string, extraCols: any[]) {
+  const row = buildOurRow(r, remark, extraCols);
+  row['Document Type'] = DOC_TYPE_LABEL[r.docType as string] || 'Debit Note';
+  return row;
+}
+
+/**
+ * Reconcile GSTR-2B B2B-CDNR rows against debit/credit notes booked in the accounts.
+ * Keyed on GSTIN + note number. Amounts are compared on absolute value because the
+ * portal and the books use mirrored sign conventions for the same transaction.
+ */
+export function reconcileNotes(cdnrRows: any[], ourNoteRows: any[], extraCols: any[] = []) {
+  const ourDict: Record<string, { gi: number; row: any }[]> = {};
+  ourNoteRows.forEach((row: any, gi: number) => {
+    const g = cleanString(normalise(String(row.gstin || '')));
+    const inv = row.invoiceNum === '(blank)' ? '' : (row.invoiceNum || '');
+    const key = g + '|' + cleanString(inv);
+    if (!ourDict[key]) ourDict[key] = [];
+    ourDict[key].push({ gi, row });
+  });
+
+  const output: any[] = [];
+  const used = new Set<number>();
+  const absCmp = (a: number, b: number) => Math.abs(Math.abs(a) - Math.abs(b)) <= NOTE_TOL;
+
+  cdnrRows.forEach((gRow: any) => {
+    const gstin = String(gRow['GSTIN of supplier'] || '');
+    const noteNo = String(gRow['Invoice number'] || '');
+    const key = cleanString(gstin) + '|' + cleanString(noteNo);
+    const cands = (ourDict[key] || []).filter(e => !used.has(e.gi));
+
+    if (cands.length > 0) {
+      const sum = (f: (r: any) => number) => cands.reduce((s, e) => s + f(e.row), 0);
+      const fig = absCmp(numVal(gRow['Taxable Value (₹)']), sum(r => r.taxable))
+        && absCmp(numVal(gRow['Integrated Tax(₹)']), sum(r => r.igst))
+        && absCmp(numVal(gRow['Central Tax(₹)']), sum(r => r.cgst))
+        && absCmp(numVal(gRow['State/UT Tax(₹)']), sum(r => r.sgst))
+        && absCmp(numVal(gRow['Cess(₹)']), sum(r => r.cess));
+      const remark = fig ? (cands.length === 1 ? 'Matched' : `Matched - Multi-line (${cands.length} entries)`) : 'Fig Not Matched';
+      output.push(buildGSTRNoteRow(gRow, remark, extraCols));
+      cands.forEach(e => { used.add(e.gi); output.push(buildOurNoteRow(e.row, fig ? remark : 'Fig Not Matched', extraCols)); });
+    } else {
+      const remark = !noteNo ? 'Note number not mentioned in GSTR 2B'
+        : !gstin ? 'GSTIN not mentioned in GSTR 2B'
+        : 'Not in our data';
+      output.push(buildGSTRNoteRow(gRow, remark, extraCols));
+    }
+  });
+
+  Object.values(ourDict).forEach(entries => {
+    entries.forEach(e => {
+      if (used.has(e.gi)) return;
+      const inv = e.row.invoiceNum === '(blank)' ? '' : (e.row.invoiceNum || '');
+      const gst = normalise(String(e.row.gstin || ''));
+      const rem = !inv ? 'Note number not mentioned in Our data'
+        : !gst ? 'GSTIN not mentioned in Our data'
+        : 'Not in GSTR 2B';
+      output.push(buildOurNoteRow(e.row, rem, extraCols));
+    });
+  });
+
+  // Fuzzy fallback — same GSTIN and amounts, note number differs
+  const pairs: any[] = [];
+  const gUn = output.filter(r => r['DATA'] === 'GSTR 2B' && r['Remarks'] === 'Not in our data');
+  const oUn = output.filter(r => r['DATA'] === 'Our Data' && r['Remarks'] === 'Not in GSTR 2B');
+  const usedOur = new Set<number>();
+  gUn.forEach(gRow => {
+    const gstin = cleanString(gRow['GSTIN of supplier'] || '');
+    if (!gstin) return;
+    let best: any = null, bestScore = 0;
+    oUn.forEach((oRow, oi) => {
+      if (usedOur.has(oi)) return;
+      if (cleanString(oRow['GSTIN of supplier'] || '') !== gstin) return;
+      if (!absCmp(numVal(gRow['Taxable Value (₹)']), numVal(oRow['Taxable Value (₹)']))) return;
+      const sim = invSimilarity(gRow['Invoice number'], oRow['Invoice number']);
+      if (sim.score >= 60 && sim.score > bestScore) { bestScore = sim.score; best = { oi, oRow, sim }; }
+    });
+    if (best) { usedOur.add(best.oi); pairs.push({ gRow, oRow: best.oRow, sim: best.sim }); }
+  });
+  pairs.forEach(p => {
+    p.gRow['Remarks'] = 'Possible Match — Note No. differs';
+    p.oRow['Remarks'] = 'Possible Match — Note No. differs';
+  });
+  (output as any)._possibleNotePairs = pairs;
+
+  return output;
+}
+
+/** Note-specific mismatch diagnosis for File 3. */
+export function diagnoseNotes(noteOutput: any[]) {
+  const noteMismatches: any[] = [];
+  const seen = new Set<any>();
+
+  noteOutput.forEach((row: any) => {
+    if (seen.has(row)) return;
+    const remark = String(row['Remarks'] || '');
+    const base = {
+      'Document Type': row['Document Type'] || '',
+      'GSTIN': row['GSTIN of supplier'] || '',
+      'Supplier': row['Trade/Legal name'] || '',
+      'Note Number': row['Invoice number'] || '',
+      'Note Date': row['Invoice Date'] || '',
+      'Taxable Value': row['Taxable Value (₹)'],
+      'IGST': row['Integrated Tax(₹)'],
+      'CGST': row['Central Tax(₹)'],
+      'SGST': row['State/UT Tax(₹)'],
+    };
+
+    if (row['DATA'] === 'GSTR 2B' && remark === 'Not in our data') {
+      noteMismatches.push({
+        ...base,
+        'Diagnosis': 'Credit note issued by supplier but no purchase return booked — ITC must be reduced in your books',
+        'Action': 'Book the purchase return / debit note in accounts and reverse the ITC',
+      });
+    } else if (row['DATA'] === 'Our Data' && remark === 'Not in GSTR 2B') {
+      noteMismatches.push({
+        ...base,
+        'Diagnosis': 'Debit note booked in accounts but the supplier has not filed the corresponding credit note in GSTR-1',
+        'Action': 'Follow up with the supplier to report the credit note',
+      });
+    } else if (row['DATA'] === 'GSTR 2B' && remark.startsWith('Fig Not Matched')) {
+      const partner = noteOutput.find((r: any) => r['DATA'] === 'Our Data'
+        && cleanString(String(r['Invoice number'] || '')) === cleanString(String(row['Invoice number'] || ''))
+        && cleanString(String(r['GSTIN of supplier'] || '')) === cleanString(String(row['GSTIN of supplier'] || '')));
+      if (!partner) return;
+      seen.add(partner);
+      const d = (a: any, b: any) => Math.round((Math.abs(numVal(a)) - Math.abs(numVal(b))) * 100) / 100;
+      const taxDiff = d(row['Taxable Value (₹)'], partner['Taxable Value (₹)']);
+      const igstDiff = d(row['Integrated Tax(₹)'], partner['Integrated Tax(₹)']);
+      const cgstDiff = d(row['Central Tax(₹)'], partner['Central Tax(₹)']);
+      const sgstDiff = d(row['State/UT Tax(₹)'], partner['State/UT Tax(₹)']);
+      const itcDiff = Math.round((igstDiff + cgstDiff + sgstDiff) * 100) / 100;
+      const isInterstate = (numVal(row['Integrated Tax(₹)']) !== 0 && numVal(partner['Central Tax(₹)']) !== 0 && numVal(partner['Integrated Tax(₹)']) === 0)
+        || (numVal(partner['Integrated Tax(₹)']) !== 0 && numVal(row['Central Tax(₹)']) !== 0 && numVal(row['Integrated Tax(₹)']) === 0);
+      let diagnosis: string;
+      if (Math.abs(taxDiff) <= 1 && Math.abs(itcDiff) <= 1) diagnosis = 'Rounding off difference only, can be ignored';
+      else if (isInterstate) diagnosis = 'Interstate vs Intrastate mismatch on the note — IGST vs CGST+SGST differs';
+      else diagnosis = 'Significant note amount mismatch — cross-check the note with the accounts entry';
+      noteMismatches.push({
+        ...base,
+        'Taxable Value': row['Taxable Value (₹)'],
+        'Taxable Value (Accounts)': partner['Taxable Value (₹)'],
+        'Taxable Difference': taxDiff,
+        'Net ITC Difference (Rs.)': itcDiff,
+        'Diagnosis': diagnosis,
+        'Action': 'Correct the note value in accounts or ask the supplier to amend',
+      });
+    }
+  });
+
+  return { noteMismatches };
+}
+
+/** Supplier-level Net ITC summary — invoices minus notes, on both sides. */
+export function buildNetITCSummary(invoiceOutput: any[], noteOutput: any[]) {
+  const map: Record<string, any> = {};
+  const itcOf = (r: any) => numVal(r['Integrated Tax(₹)']) + numVal(r['Central Tax(₹)']) + numVal(r['State/UT Tax(₹)']);
+  const get = (gstin: string, name: string) => {
+    const k = cleanString(gstin) || '(blank)';
+    if (!map[k]) map[k] = { gstin: gstin || '(blank)', name: name || '', b2bInv: 0, b2bNote: 0, bookInv: 0, bookNote: 0 };
+    if (!map[k].name && name) map[k].name = name;
+    return map[k];
+  };
+
+  (invoiceOutput || []).forEach((r: any) => {
+    if (String(r['Remarks'] || '').startsWith('Possible Match') === false && !r['DATA']) return;
+    const e = get(String(r['GSTIN of supplier'] || ''), String(r['Trade/Legal name'] || ''));
+    if (r['DATA'] === 'GSTR 2B') e.b2bInv += itcOf(r);
+    else if (r['DATA'] === 'Our Data') e.bookInv += itcOf(r);
+  });
+  (noteOutput || []).forEach((r: any) => {
+    const e = get(String(r['GSTIN of supplier'] || ''), String(r['Trade/Legal name'] || ''));
+    if (r['DATA'] === 'GSTR 2B') e.b2bNote += itcOf(r);
+    else if (r['DATA'] === 'Our Data') e.bookNote += itcOf(r);
+  });
+
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  return Object.values(map).map((e: any) => {
+    const net2b = e.b2bInv + e.b2bNote;
+    const netBooks = e.bookInv + e.bookNote;
+    return {
+      'GSTIN': e.gstin,
+      'Supplier': e.name,
+      'ITC on Invoices (GSTR-2B)': r2(e.b2bInv),
+      'ITC on Notes (GSTR-2B)': r2(e.b2bNote),
+      'Net ITC as per GSTR-2B': r2(net2b),
+      'ITC on Invoices (Books)': r2(e.bookInv),
+      'ITC on Notes (Books)': r2(e.bookNote),
+      'Net ITC as per Books': r2(netBooks),
+      'Difference (2B - Books)': r2(net2b - netBooks),
+    };
+  }).sort((a: any, b: any) => Math.abs(b['Difference (2B - Books)']) - Math.abs(a['Difference (2B - Books)']));
+}

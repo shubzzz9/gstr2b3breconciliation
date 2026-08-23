@@ -169,7 +169,12 @@ export interface GSTRScanResult {
   sanityWarnings: string[];
   dataStartIdx: number;
   headerFallback: boolean;
+  /** Header name of the CDNR "Note type" column (C / D), when present */
+  noteTypeCol?: string | null;
+  /** Sheet this scan came from */
+  sheetName?: string;
 }
+
 
 export function scanGSTR2B(wb: any, sheetName?: string): GSTRScanResult {
   const sName = sheetName && wb.Sheets[sheetName] ? sheetName : wb.SheetNames[0];

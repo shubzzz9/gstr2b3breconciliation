@@ -370,6 +370,83 @@ export function parseGSTR2B(scan: GSTRScanResult): any[] {
 }
 
 // ═══════════════════════════════════════════════════════════
+// GSTR-2B SHEET CLASSIFICATION (B2B vs B2B-CDNR) — Option 2 only
+// ═══════════════════════════════════════════════════════════
+
+export interface GSTR2BSheetMap {
+  b2bSheet: string | null;
+  cdnrSheet: string | null;
+  amendmentSheets: string[];
+  allSheets: string[];
+}
+
+export function classifyGSTR2BSheets(wb: any): GSTR2BSheetMap {
+  const names: string[] = wb?.SheetNames || [];
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  let b2bSheet: string | null = null;
+  let cdnrSheet: string | null = null;
+  const amendmentSheets: string[] = [];
+
+  names.forEach(n => {
+    const k = norm(n);
+    if (k.includes('readme') || k.includes('instruction')) return;
+    const isAmend = /a$/.test(k) && (k.includes('b2b') || k.includes('cdnr'));
+    if (k.includes('cdnr')) {
+      if (isAmend) amendmentSheets.push(n);
+      else if (!cdnrSheet) cdnrSheet = n;
+    } else if (k.includes('b2b')) {
+      if (isAmend) amendmentSheets.push(n);
+      else if (!b2bSheet) b2bSheet = n;
+    }
+  });
+
+  // Fall back to the first sheet when nothing matched (single-sheet exports)
+  if (!b2bSheet && !cdnrSheet) b2bSheet = names[0] || null;
+  else if (!b2bSheet) b2bSheet = null;
+
+  return { b2bSheet, cdnrSheet, amendmentSheets, allSheets: names };
+}
+
+/**
+ * Parse a GSTR-2B CDNR (credit/debit note) sheet into GSTR-2B-shaped rows.
+ * Sign convention: supplier credit note reduces ITC → negative amounts.
+ * Supplier debit note increases ITC → positive amounts.
+ */
+export function parseGSTR2BNotes(scan: GSTRScanResult): any[] {
+  const rows = parseGSTR2B(scan);
+  const { raw, allHeaders: hdrs, dataStartIdx, noteTypeCol } = scan;
+  const noteIdx = noteTypeCol ? hdrs.indexOf(noteTypeCol) : -1;
+
+  // Build a GSTIN||note-no → note type lookup from the raw rows
+  const typeByKey: Record<string, DocType> = {};
+  if (noteIdx >= 0) {
+    const gCol = scan.detected['GSTIN of supplier'] ? hdrs.indexOf(scan.detected['GSTIN of supplier'] as string) : -1;
+    const nCol = scan.detected['Invoice number'] ? hdrs.indexOf(scan.detected['Invoice number'] as string) : -1;
+    for (let i = dataStartIdx; i < raw.length; i++) {
+      const r = raw[i];
+      if (!r) continue;
+      const key = String(gCol >= 0 ? r[gCol] || '' : '').trim() + '||' + String(nCol >= 0 ? r[nCol] || '' : '').trim();
+      typeByKey[key] = classifyPortalNoteType(r[noteIdx]);
+    }
+  }
+
+  const AMT_COLS = ['Invoice Value(₹)', 'Taxable Value (₹)', 'Integrated Tax(₹)', 'Central Tax(₹)', 'State/UT Tax(₹)', 'Cess(₹)'];
+  return rows.map(row => {
+    const key = String(row['GSTIN of supplier'] || '').trim() + '||' + String(row['Invoice number'] || '').trim();
+    const docType: DocType = typeByKey[key] || 'credit_note';
+    const out = { ...row, docType };
+    AMT_COLS.forEach(c => {
+      const v = numVal(out[c]);
+      if (v === 0) { out[c] = out[c] === '' ? '' : 0; return; }
+      out[c] = docType === 'debit_note' ? Math.abs(v) : -Math.abs(v);
+    });
+    return out;
+  });
+}
+
+
+
+// ═══════════════════════════════════════════════════════════
 // COMBINED FILE PARSING
 // ═══════════════════════════════════════════════════════════
 

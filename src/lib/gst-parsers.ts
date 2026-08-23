@@ -317,7 +317,10 @@ export function scanGSTR2B(wb: any, sheetName?: string): GSTRScanResult {
     }
   }
 
-  return { hdrIdx: hdr1, raw, allHeaders: hdrs, detected: det, extraCols, sanityWarnings, dataStartIdx, headerFallback };
+  const noteTypeCol = hdrs.find((h: string) => /note\s*type/i.test(h)) || null;
+
+  return { hdrIdx: hdr1, raw, allHeaders: hdrs, detected: det, extraCols, sanityWarnings, dataStartIdx, headerFallback, noteTypeCol, sheetName: sName };
+
 }
 
 export function parseGSTR2B(scan: GSTRScanResult): any[] {

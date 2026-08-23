@@ -214,10 +214,10 @@ export function scanGSTR2B(wb: any, sheetName?: string): GSTRScanResult {
   const GSTR_FUZZY_KW: Record<string, string[]> = {
     'GSTIN of supplier': ['gstin of supplier', 'gstin of supp', 'gstin', 'gst no', 'gst num'],
     'Trade/Legal name': ['trade', 'legal name', 'supplier name', 'party name', 'particulars'],
-    'Invoice number': ['invoice no', 'invoice num', 'bill no', 'bill num'],
-    'Invoice type': ['invoice type', 'inv type'],
-    'Invoice Date': ['invoice date', 'bill date', 'inv date'],
-    'Invoice Value(₹)': ['invoice value', 'inv value', 'bill value', 'inv val'],
+    'Invoice number': ['invoice no', 'invoice num', 'bill no', 'bill num', 'note number', 'note no'],
+    'Invoice type': ['invoice type', 'inv type', 'note supply type'],
+    'Invoice Date': ['invoice date', 'bill date', 'inv date', 'note date'],
+    'Invoice Value(₹)': ['invoice value', 'inv value', 'bill value', 'inv val', 'note value'],
     'Place of supply': ['place of supply', 'place of supp'],
     'Supply Attract Reverse Charge': ['reverse charge', 'rev charge'],
     'Taxable Value (₹)': ['taxable value', 'taxable amt', 'taxable amount'],
@@ -226,6 +226,7 @@ export function scanGSTR2B(wb: any, sheetName?: string): GSTRScanResult {
     'State/UT Tax(₹)': ['state/ut', 'sgst', 'ut tax'],
     'Cess(₹)': ['cess'],
   };
+
 
   const STD_COLS = [
     'GSTIN of supplier', 'Trade/Legal name', 'Invoice number', 'Invoice type',

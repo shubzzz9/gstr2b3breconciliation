@@ -60,6 +60,14 @@ const Tool = () => {
   // Scan results
   const [tallyScan, setTallyScan] = useState<any>(null);
   const [gstrScan, setGstrScan] = useState<any>(null);
+  // Option 2 — debit / credit notes (CDNR)
+  const [cdnrWB, setCdnrWB] = useState<any>(null);
+  const [cdnrName, setCdnrName] = useState('');
+  const [cdnrScan, setCdnrScan] = useState<any>(null);
+  const [sheetMap, setSheetMap] = useState<any>(null);
+  const [noteRows, setNoteRows] = useState<any>(null);
+  const [noteDiag, setNoteDiag] = useState<any>(null);
+  const [netITC, setNetITC] = useState<any>(null);
 
   // Mappings
   const [singleMap, setSingleMap] = useState<Record<string, number>>({});

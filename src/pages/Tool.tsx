@@ -465,6 +465,20 @@ const Tool = () => {
                           <td>{(singleMap[row.id] ?? -1) >= 0 ? <span className="text-xs text-success font-semibold">✓ Found</span> : row.required ? <span className="text-xs text-destructive font-semibold">✗ Required</span> : <span className="text-xs text-warning font-semibold">⚠ Optional</span>}</td>
                         </tr>
                       ))}
+                      {mode === 'full' && (
+                        <tr key={TALLY_NOTE_ROW.id}>
+                          <td className="text-xs font-medium">{TALLY_NOTE_ROW.label}</td>
+                          <td>
+                            <select className="w-full p-1 border border-input rounded text-xs bg-background"
+                              value={singleMap[TALLY_NOTE_ROW.id] ?? -1}
+                              onChange={(e) => setSingleMap(prev => ({ ...prev, [TALLY_NOTE_ROW.id]: parseInt(e.target.value) }))}>
+                              <option value={-1}>(Not mapped — detect notes from negative amounts)</option>
+                              {tallyScan.headers.map((h: string, i: number) => <option key={i} value={i}>{h}</option>)}
+                            </select>
+                          </td>
+                          <td>{(singleMap[TALLY_NOTE_ROW.id] ?? -1) >= 0 ? <span className="text-xs text-success font-semibold">✓ Found</span> : <span className="text-xs text-warning font-semibold">⚠ Optional</span>}</td>
+                        </tr>
+                      )}
                       {TALLY_MULTI_ROWS.map(row => (
                         <tr key={row.id}>
                           <td className="text-xs font-medium">{row.label} {row.required && <span className="text-destructive">*</span>}</td>

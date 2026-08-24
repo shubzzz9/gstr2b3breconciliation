@@ -510,6 +510,15 @@ const Tool = () => {
               {mode === 'full' && gstrScan && (
                 <div className="mb-6">
                   <h3 className="text-sm font-bold text-primary bg-secondary p-2 rounded mb-2">🏛️ GSTR-2B — Column Mapping</h3>
+                  <div className="flex flex-wrap gap-2 mb-3 text-[11px]">
+                    <span className="px-2 py-0.5 rounded-full bg-success/15 text-success font-semibold">B2B sheet: {sheetMap?.b2bSheet || gstrScan.sheetName || 'Sheet 1'}</span>
+                    {cdnrScan
+                      ? <span className="px-2 py-0.5 rounded-full bg-accent/20 text-accent font-semibold">Notes sheet: {sheetMap?.cdnrSheet || cdnrName || 'uploaded file'}</span>
+                      : <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-semibold">No debit/credit note sheet found</span>}
+                    {(sheetMap?.amendmentSheets || []).map((s: string) => (
+                      <span key={s} className="px-2 py-0.5 rounded-full bg-warning/20 text-warning font-semibold">Amendment sheet ignored: {s}</span>
+                    ))}
+                  </div>
                   {gstrScan.headerFallback && (
                     <div className="alert-box alert-warn mb-3 text-xs">
                       <strong>⚠ GSTR-2B header detected via fuzzy matching.</strong> Columns have been auto-mapped — please review and correct any wrong mappings.

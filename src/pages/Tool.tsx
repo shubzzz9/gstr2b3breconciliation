@@ -218,9 +218,16 @@ const Tool = () => {
       setSingleMap(scan.singleGuesses);
       setMultiMap(scan.multiGuesses);
       if (m === 'full') {
-        const gScan = scanGSTR2B(gstrWB);
+        const map = classifyGSTR2BSheets(gstrWB);
+        setSheetMap(map);
+        const gScan = scanGSTR2B(gstrWB, map.b2bSheet || undefined);
         setGstrScan(gScan);
         setGstrDetected({ ...gScan.detected });
+        // Notes: prefer a CDNR sheet inside the same workbook, else the optional upload
+        let nScan: any = null;
+        if (map.cdnrSheet) nScan = scanGSTR2B(gstrWB, map.cdnrSheet);
+        else if (cdnrWB) nScan = scanGSTR2B(cdnrWB);
+        setCdnrScan(nScan);
       }
       setStep(2);
     } catch (e: any) { setError(e.message); }

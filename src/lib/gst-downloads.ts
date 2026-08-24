@@ -219,7 +219,7 @@ export function downloadFile2(recoRows: any[], extraCols: any[] = [], noteRows: 
 // FILE 3: MISMATCH DIAGNOSIS — exact port with all 7 sheets
 // ═══════════════════════════════════════════════════════════
 
-export function downloadFile3(diagData: any, recoRows: any[], possibleMatchPairs: any[]) {
+export function downloadFile3(diagData: any, recoRows: any[], possibleMatchPairs: any[], noteMismatches: any[] = []) {
   if (!diagData) return;
   const wb = XLSX.utils.book_new();
 

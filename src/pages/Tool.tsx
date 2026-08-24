@@ -406,6 +406,7 @@ const Tool = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                   <UploadBox icon="📊" label="Your Purchase File *" hint="Tally export or any invoice-wise Excel" fileName={tallyName} onFile={(f: File) => handleFile(f, setTallyWB, setTallyName)} />
                   <UploadBox icon="🏛️" label="GSTR-2B from GST Portal *" hint={<><span className="font-bold">B2B</span>{" "}Excel from gstin.gov.in</>} fileName={gstrName} onFile={(f: File) => handleFile(f, setGstrWB, setGstrName)} />
+                  <UploadBox icon="🧾" label="Debit / Credit Note sheet (optional)" hint="Only if your GSTR-2B file has no B2B-CDNR sheet" fileName={cdnrName} onFile={(f: File) => handleFile(f, setCdnrWB, setCdnrName)} />
                 </div>
                 <button disabled={!tallyWB || !gstrWB} onClick={() => handleStartFlow('full')} className="btn-tool bg-success text-success-foreground hover:opacity-90">Continue with Option 2 →</button>
               </div>

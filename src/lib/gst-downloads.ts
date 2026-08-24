@@ -175,13 +175,27 @@ export function downloadFile1(tallyData: any[]) {
 // FILE 2: RECONCILIATION OUTPUT + REMARKS GUIDE
 // ═══════════════════════════════════════════════════════════
 
-export function downloadFile2(recoRows: any[], extraCols: any[] = []) {
+export function downloadFile2(recoRows: any[], extraCols: any[] = [], noteRows: any[] = [], netITC: any[] = []) {
   if (!recoRows) return;
   const cols = [...GSTR_STD_COLS, ...extraCols.filter(e => e.include).map(e => e.gstrCol), 'DATA', 'Remarks'];
   const ws = makeStyledSheet(recoRows, cols);
   ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Reconciliation_Output');
+
+  if (noteRows && noteRows.length) {
+    const noteCols = ['Document Type', ...cols];
+    const wsNotes = makeStyledSheet(noteRows, noteCols);
+    wsNotes['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
+    XLSX.utils.book_append_sheet(wb, wsNotes, 'Debit_Credit_Notes');
+  }
+
+  if (netITC && netITC.length) {
+    const wsNet = makeStyledSheet(netITC, Object.keys(netITC[0]));
+    wsNet['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
+    XLSX.utils.book_append_sheet(wb, wsNet, 'Net ITC Summary');
+  }
+
 
   // Remarks Legend sheet
   const legendRows = [
@@ -205,7 +219,7 @@ export function downloadFile2(recoRows: any[], extraCols: any[] = []) {
 // FILE 3: MISMATCH DIAGNOSIS — exact port with all 7 sheets
 // ═══════════════════════════════════════════════════════════
 
-export function downloadFile3(diagData: any, recoRows: any[], possibleMatchPairs: any[]) {
+export function downloadFile3(diagData: any, recoRows: any[], possibleMatchPairs: any[], noteMismatches: any[] = []) {
   if (!diagData) return;
   const wb = XLSX.utils.book_new();
 
@@ -460,6 +474,12 @@ export function downloadFile3(diagData: any, recoRows: any[], possibleMatchPairs
   ws8['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
   ws8['!autofilter'] = { ref: 'A1:H1' };
   XLSX.utils.book_append_sheet(wb, ws8, 'Summary');
+
+  if (noteMismatches && noteMismatches.length) {
+    const wsN = makeStyledSheet(noteMismatches, Object.keys(noteMismatches[0]));
+    wsN['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
+    XLSX.utils.book_append_sheet(wb, wsN, 'Note Mismatches');
+  }
 
   XLSX.writeFile(wb, 'GST_Mismatch_Diagnosis_' + stamp() + '.xlsx');
 }

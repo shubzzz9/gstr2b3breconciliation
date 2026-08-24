@@ -3,10 +3,10 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import XLSX from 'xlsx-js-style';
-import { scanTally, processTally, scanGSTR2B, parseGSTR2B, parseCombined, parsePurchaseRegister, parseTally4, reParseCombined, reParsePR, reParseTally4 } from '@/lib/gst-parsers';
-import { reconcile, diagnoseMismatches, reconcilePRTally } from '@/lib/gst-reconcile';
+import { scanTally, processTally, scanGSTR2B, parseGSTR2B, parseCombined, parsePurchaseRegister, parseTally4, reParseCombined, reParsePR, reParseTally4, classifyGSTR2BSheets, parseGSTR2BNotes } from '@/lib/gst-parsers';
+import { reconcile, diagnoseMismatches, reconcilePRTally, reconcileNotes, diagnoseNotes, buildNetITCSummary } from '@/lib/gst-reconcile';
 import { downloadFile1, downloadFile2, downloadFile3, downloadPRTallyAudit } from '@/lib/gst-downloads';
-import { TALLY_SINGLE_ROWS, TALLY_MULTI_ROWS, GSTR_STD_COLS } from '@/lib/gst-helpers';
+import { TALLY_SINGLE_ROWS, TALLY_MULTI_ROWS, TALLY_NOTE_ROW, GSTR_STD_COLS } from '@/lib/gst-helpers';
 import { generateFingerprint } from '@/lib/fingerprint';
 
 const downloadGSTR2BTemplate = () => {
@@ -60,6 +60,14 @@ const Tool = () => {
   // Scan results
   const [tallyScan, setTallyScan] = useState<any>(null);
   const [gstrScan, setGstrScan] = useState<any>(null);
+  // Option 2 — debit / credit notes (CDNR)
+  const [cdnrWB, setCdnrWB] = useState<any>(null);
+  const [cdnrName, setCdnrName] = useState('');
+  const [cdnrScan, setCdnrScan] = useState<any>(null);
+  const [sheetMap, setSheetMap] = useState<any>(null);
+  const [noteRows, setNoteRows] = useState<any>(null);
+  const [noteDiag, setNoteDiag] = useState<any>(null);
+  const [netITC, setNetITC] = useState<any>(null);
 
   // Mappings
   const [singleMap, setSingleMap] = useState<Record<string, number>>({});
@@ -210,9 +218,16 @@ const Tool = () => {
       setSingleMap(scan.singleGuesses);
       setMultiMap(scan.multiGuesses);
       if (m === 'full') {
-        const gScan = scanGSTR2B(gstrWB);
+        const map = classifyGSTR2BSheets(gstrWB);
+        setSheetMap(map);
+        const gScan = scanGSTR2B(gstrWB, map.b2bSheet || undefined);
         setGstrScan(gScan);
         setGstrDetected({ ...gScan.detected });
+        // Notes: prefer a CDNR sheet inside the same workbook, else the optional upload
+        let nScan: any = null;
+        if (map.cdnrSheet) nScan = scanGSTR2B(gstrWB, map.cdnrSheet);
+        else if (cdnrWB) nScan = scanGSTR2B(cdnrWB);
+        setCdnrScan(nScan);
       }
       setStep(2);
     } catch (e: any) { setError(e.message); }
@@ -252,9 +267,14 @@ const Tool = () => {
       }
       setProgressLabel('Processing tally data...');
       setProgress(20);
-      const mapping = { hdrIdx: tallyScan.hdrIdx, headers: tallyScan.headers, raw: tallyScan.raw, ...singleMap, ...multiMap };
+      const noteCol = mode === 'full' ? (singleMap[TALLY_NOTE_ROW.id] ?? -1) : -1;
+      const wantNotes = mode === 'full' && (!!cdnrScan || noteCol >= 0);
+      const mapping = { hdrIdx: tallyScan.hdrIdx, headers: tallyScan.headers, raw: tallyScan.raw, ...singleMap, ...multiMap, noteType: noteCol, classifyNotes: wantNotes };
       const tResult = processTally(mapping as any);
-      setTallyData(tResult.rows);
+      const allRows = tResult.rows as any[];
+      const invoiceRows = wantNotes ? allRows.filter(r => (r.docType || 'invoice') === 'invoice') : allRows;
+      const ourNoteRows = wantNotes ? allRows.filter(r => (r.docType || 'invoice') !== 'invoice') : [];
+      setTallyData(invoiceRows);
       setTallyResult(tResult);
 
       if (mode === 'full' && gstrScan) {
@@ -265,12 +285,24 @@ const Tool = () => {
         const gstrRows = parseGSTR2B(editedScan);
         setProgressLabel('Reconciling...');
         setProgress(70);
-        const reco = reconcile(gstrRows, tResult.rows, editedScan.extraCols);
+        const reco = reconcile(gstrRows, invoiceRows, editedScan.extraCols);
         setRecoRows(reco);
         setProgress(85);
         setProgressLabel('Diagnosing mismatches...');
-        const diag = diagnoseMismatches(gstrRows, tResult.rows, reco);
+        const diag = diagnoseMismatches(gstrRows, invoiceRows, reco);
         setDiagData(diag);
+
+        if (wantNotes) {
+          setProgressLabel('Reconciling debit / credit notes...');
+          setProgress(92);
+          const cdnrRows = cdnrScan ? parseGSTR2BNotes(cdnrScan) : [];
+          const nReco = reconcileNotes(cdnrRows, ourNoteRows, cdnrScan?.extraCols || []);
+          setNoteRows(nReco);
+          setNoteDiag(diagnoseNotes(nReco));
+          setNetITC(buildNetITCSummary(reco, nReco));
+        } else {
+          setNoteRows(null); setNoteDiag(null); setNetITC(null);
+        }
       }
       setProgress(100);
       setStep(4);
@@ -286,6 +318,8 @@ const Tool = () => {
     setDiagData(null); setAuditResult(null); setTallyResult(null);
     setCombinedDetection(null); setPrDetection({}); setTally4Detection({});
     setPrHeaders([]); setTally4Headers([]);
+    setCdnrWB(null); setCdnrName(''); setCdnrScan(null); setSheetMap(null);
+    setNoteRows(null); setNoteDiag(null); setNetITC(null);
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="spinner" /></div>;
@@ -372,6 +406,7 @@ const Tool = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                   <UploadBox icon="📊" label="Your Purchase File *" hint="Tally export or any invoice-wise Excel" fileName={tallyName} onFile={(f: File) => handleFile(f, setTallyWB, setTallyName)} />
                   <UploadBox icon="🏛️" label="GSTR-2B from GST Portal *" hint={<><span className="font-bold">B2B</span>{" "}Excel from gstin.gov.in</>} fileName={gstrName} onFile={(f: File) => handleFile(f, setGstrWB, setGstrName)} />
+                  <UploadBox icon="🧾" label="Debit / Credit Note sheet (optional)" hint="Only if your GSTR-2B file has no B2B-CDNR sheet" fileName={cdnrName} onFile={(f: File) => handleFile(f, setCdnrWB, setCdnrName)} />
                 </div>
                 <button disabled={!tallyWB || !gstrWB} onClick={() => handleStartFlow('full')} className="btn-tool bg-success text-success-foreground hover:opacity-90">Continue with Option 2 →</button>
               </div>
@@ -430,6 +465,20 @@ const Tool = () => {
                           <td>{(singleMap[row.id] ?? -1) >= 0 ? <span className="text-xs text-success font-semibold">✓ Found</span> : row.required ? <span className="text-xs text-destructive font-semibold">✗ Required</span> : <span className="text-xs text-warning font-semibold">⚠ Optional</span>}</td>
                         </tr>
                       ))}
+                      {mode === 'full' && (
+                        <tr key={TALLY_NOTE_ROW.id}>
+                          <td className="text-xs font-medium">{TALLY_NOTE_ROW.label}</td>
+                          <td>
+                            <select className="w-full p-1 border border-input rounded text-xs bg-background"
+                              value={singleMap[TALLY_NOTE_ROW.id] ?? -1}
+                              onChange={(e) => setSingleMap(prev => ({ ...prev, [TALLY_NOTE_ROW.id]: parseInt(e.target.value) }))}>
+                              <option value={-1}>(Not mapped — detect notes from negative amounts)</option>
+                              {tallyScan.headers.map((h: string, i: number) => <option key={i} value={i}>{h}</option>)}
+                            </select>
+                          </td>
+                          <td>{(singleMap[TALLY_NOTE_ROW.id] ?? -1) >= 0 ? <span className="text-xs text-success font-semibold">✓ Found</span> : <span className="text-xs text-warning font-semibold">⚠ Optional</span>}</td>
+                        </tr>
+                      )}
                       {TALLY_MULTI_ROWS.map(row => (
                         <tr key={row.id}>
                           <td className="text-xs font-medium">{row.label} {row.required && <span className="text-destructive">*</span>}</td>
@@ -461,6 +510,15 @@ const Tool = () => {
               {mode === 'full' && gstrScan && (
                 <div className="mb-6">
                   <h3 className="text-sm font-bold text-primary bg-secondary p-2 rounded mb-2">🏛️ GSTR-2B — Column Mapping</h3>
+                  <div className="flex flex-wrap gap-2 mb-3 text-[11px]">
+                    <span className="px-2 py-0.5 rounded-full bg-success/15 text-success font-semibold">B2B sheet: {sheetMap?.b2bSheet || gstrScan.sheetName || 'Sheet 1'}</span>
+                    {cdnrScan
+                      ? <span className="px-2 py-0.5 rounded-full bg-accent/20 text-accent font-semibold">Notes sheet: {sheetMap?.cdnrSheet || cdnrName || 'uploaded file'}</span>
+                      : <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-semibold">No debit/credit note sheet found</span>}
+                    {(sheetMap?.amendmentSheets || []).map((s: string) => (
+                      <span key={s} className="px-2 py-0.5 rounded-full bg-warning/20 text-warning font-semibold">Amendment sheet ignored: {s}</span>
+                    ))}
+                  </div>
                   {gstrScan.headerFallback && (
                     <div className="alert-box alert-warn mb-3 text-xs">
                       <strong>⚠ GSTR-2B header detected via fuzzy matching.</strong> Columns have been auto-mapped — please review and correct any wrong mappings.
@@ -738,8 +796,10 @@ const Tool = () => {
                     <div className="text-[10px] text-muted-foreground mb-3 space-y-0.5">
                       <div>• Reconciliation Output — <strong>{recoRows.length}</strong> rows</div>
                       <div>• Remarks Guide — <strong>7</strong> rows</div>
+                      {noteRows && noteRows.length > 0 && <div>• Debit / Credit Notes — <strong>{noteRows.length}</strong> rows</div>}
+                      {netITC && netITC.length > 0 && <div>• Net ITC Summary — <strong>{netITC.length}</strong> suppliers</div>}
                     </div>
-                    <button onClick={() => handleDownload('file2', () => downloadFile2(recoRows, gstrScan?.extraCols))} className="btn-tool bg-success text-success-foreground hover:opacity-90">💾 Download</button>
+                    <button onClick={() => handleDownload('file2', () => downloadFile2(recoRows, gstrScan?.extraCols, noteRows || [], netITC || []))} className="btn-tool bg-success text-success-foreground hover:opacity-90">💾 Download</button>
                   </div>
                 )}
                 {(mode === 'full' || mode === 'combined') && diagData && (

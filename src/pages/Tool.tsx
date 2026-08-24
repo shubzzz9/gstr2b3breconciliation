@@ -267,9 +267,14 @@ const Tool = () => {
       }
       setProgressLabel('Processing tally data...');
       setProgress(20);
-      const mapping = { hdrIdx: tallyScan.hdrIdx, headers: tallyScan.headers, raw: tallyScan.raw, ...singleMap, ...multiMap };
+      const noteCol = mode === 'full' ? (singleMap[TALLY_NOTE_ROW.id] ?? -1) : -1;
+      const wantNotes = mode === 'full' && (!!cdnrScan || noteCol >= 0);
+      const mapping = { hdrIdx: tallyScan.hdrIdx, headers: tallyScan.headers, raw: tallyScan.raw, ...singleMap, ...multiMap, noteType: noteCol, classifyNotes: wantNotes };
       const tResult = processTally(mapping as any);
-      setTallyData(tResult.rows);
+      const allRows = tResult.rows as any[];
+      const invoiceRows = wantNotes ? allRows.filter(r => (r.docType || 'invoice') === 'invoice') : allRows;
+      const ourNoteRows = wantNotes ? allRows.filter(r => (r.docType || 'invoice') !== 'invoice') : [];
+      setTallyData(invoiceRows);
       setTallyResult(tResult);
 
       if (mode === 'full' && gstrScan) {
@@ -280,12 +285,24 @@ const Tool = () => {
         const gstrRows = parseGSTR2B(editedScan);
         setProgressLabel('Reconciling...');
         setProgress(70);
-        const reco = reconcile(gstrRows, tResult.rows, editedScan.extraCols);
+        const reco = reconcile(gstrRows, invoiceRows, editedScan.extraCols);
         setRecoRows(reco);
         setProgress(85);
         setProgressLabel('Diagnosing mismatches...');
-        const diag = diagnoseMismatches(gstrRows, tResult.rows, reco);
+        const diag = diagnoseMismatches(gstrRows, invoiceRows, reco);
         setDiagData(diag);
+
+        if (wantNotes) {
+          setProgressLabel('Reconciling debit / credit notes...');
+          setProgress(92);
+          const cdnrRows = cdnrScan ? parseGSTR2BNotes(cdnrScan) : [];
+          const nReco = reconcileNotes(cdnrRows, ourNoteRows, cdnrScan?.extraCols || []);
+          setNoteRows(nReco);
+          setNoteDiag(diagnoseNotes(nReco));
+          setNetITC(buildNetITCSummary(reco, nReco));
+        } else {
+          setNoteRows(null); setNoteDiag(null); setNetITC(null);
+        }
       }
       setProgress(100);
       setStep(4);
@@ -301,6 +318,8 @@ const Tool = () => {
     setDiagData(null); setAuditResult(null); setTallyResult(null);
     setCombinedDetection(null); setPrDetection({}); setTally4Detection({});
     setPrHeaders([]); setTally4Headers([]);
+    setCdnrWB(null); setCdnrName(''); setCdnrScan(null); setSheetMap(null);
+    setNoteRows(null); setNoteDiag(null); setNetITC(null);
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="spinner" /></div>;

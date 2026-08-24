@@ -475,6 +475,12 @@ export function downloadFile3(diagData: any, recoRows: any[], possibleMatchPairs
   ws8['!autofilter'] = { ref: 'A1:H1' };
   XLSX.utils.book_append_sheet(wb, ws8, 'Summary');
 
+  if (noteMismatches && noteMismatches.length) {
+    const wsN = makeStyledSheet(noteMismatches, Object.keys(noteMismatches[0]));
+    wsN['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
+    XLSX.utils.book_append_sheet(wb, wsN, 'Note Mismatches');
+  }
+
   XLSX.writeFile(wb, 'GST_Mismatch_Diagnosis_' + stamp() + '.xlsx');
 }
 

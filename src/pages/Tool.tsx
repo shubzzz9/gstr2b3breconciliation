@@ -813,9 +813,13 @@ const Tool = () => {
                       <div>• GSTIN Mismatches — <strong>{diagData.gstinMismatches?.length || 0}</strong> rows</div>
                       <div>• Possible Matches — <strong>{((recoRows as any)?._possibleMatchPairs || []).length}</strong> rows</div>
                       <div>• Fig Not Matched — <strong>{diagData.figNotMatched?.length || 0}</strong> rows</div>
+                      {mode === 'full' && (noteDiag?.noteMismatches?.length || 0) > 0 && (
+                        <div>• Note Mismatches — <strong>{noteDiag.noteMismatches.length}</strong> rows</div>
+                      )}
                       <div>• Summary — category totals</div>
                     </div>
-                    <button onClick={() => handleDownload('file3', () => downloadFile3(diagData, recoRows || [], (recoRows as any)?._possibleMatchPairs || []))} className="btn-tool bg-primary text-primary-foreground hover:opacity-90">💾 Download</button>
+                    <button onClick={() => handleDownload('file3', () => downloadFile3(diagData, recoRows || [], (recoRows as any)?._possibleMatchPairs || [], (mode === 'full' && noteDiag?.noteMismatches) || []))} className="btn-tool bg-primary text-primary-foreground hover:opacity-90">💾 Download</button>
+
                   </div>
                 )}
                 {mode === 'prtally' && auditResult && (

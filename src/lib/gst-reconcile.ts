@@ -437,7 +437,7 @@ export function reconcilePRTally(prResult: any, tallyResult4: any) {
 // DEBIT / CREDIT NOTE RECONCILIATION (Option 2 only)
 // ═══════════════════════════════════════════════════════════
 
-import { DOC_TYPE_LABEL, type DocType } from './gst-helpers';
+import { DOC_TYPE_LABEL } from './gst-helpers';
 
 const NOTE_TOL = 5;
 

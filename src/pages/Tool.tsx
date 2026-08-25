@@ -406,9 +406,27 @@ const Tool = () => {
                 <p className="text-xs text-muted-foreground mb-3">Upload purchase file + GSTR-2B from GST portal → full reconciliation.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                   <UploadBox icon="📊" label="Your Purchase File *" hint="Tally export or any invoice-wise Excel" fileName={tallyName} onFile={(f: File) => handleFile(f, setTallyWB, setTallyName)} />
-                  <UploadBox icon="🏛️" label="GSTR-2B from GST Portal *" hint={<><span className="font-bold">B2B</span>{" "}Excel from gstin.gov.in</>} fileName={gstrName} onFile={(f: File) => handleFile(f, setGstrWB, setGstrName)} />
-                  <UploadBox icon="🧾" label="Debit / Credit Note sheet (optional)" hint="Only if your GSTR-2B file has no B2B-CDNR sheet" fileName={cdnrName} onFile={(f: File) => handleFile(f, setCdnrWB, setCdnrName)} />
+                  <UploadBox icon="🏛️" label="Full GSTR-2B Workbook from GST Portal *" hint="Upload the complete Excel from gstin.gov.in — we auto-detect B2B and B2B-CDNR sheets" fileName={gstrName} onFile={(f: File) => handleFile(f, setGstrWB, setGstrName, (wb) => {
+                    const map = classifyGSTR2BSheets(wb);
+                    setSheetMap(map);
+                    if (map.cdnrSheet) { setCdnrWB(null); setCdnrName(''); }
+                  })} />
                 </div>
+                {gstrWB && (
+                  <div className="mb-3">
+                    {!sheetMap ? (
+                      <div className="text-xs text-muted-foreground">Scanning workbook sheets...</div>
+                    ) : sheetMap.cdnrSheet ? (
+                      <div className="text-xs bg-success/10 text-success border border-success/30 rounded px-3 py-2">
+                        ✓ Found <strong>{sheetMap.cdnrSheet}</strong> sheet inside your workbook — debit/credit notes will be reconciled automatically.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <UploadBox icon="🧾" label="Debit / Credit Note sheet (optional)" hint="Only if your GSTR-2B file has no B2B-CDNR sheet" fileName={cdnrName} onFile={(f: File) => handleFile(f, setCdnrWB, setCdnrName)} />
+                      </div>
+                    )}
+                  </div>
+                )}
                 <button disabled={!tallyWB || !gstrWB} onClick={() => handleStartFlow('full')} className="btn-tool bg-success text-success-foreground hover:opacity-90">Continue with Option 2 →</button>
               </div>
 

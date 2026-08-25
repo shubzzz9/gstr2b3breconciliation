@@ -160,13 +160,14 @@ const Tool = () => {
     setPendingDownload(null);
   };
 
-  const handleFile = (file: File, setter: (wb: any) => void, nameSetter: (n: string) => void) => {
+  const handleFile = (file: File, setter: (wb: any) => void, nameSetter: (n: string) => void, onParse?: (wb: any) => void) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const wb = XLSX.read(e.target?.result, { type: 'binary' });
         setter(wb);
         nameSetter(file.name);
+        onParse?.(wb);
       } catch { alert('Failed to read file. Make sure it is a valid Excel file.'); }
     };
     reader.readAsBinaryString(file);

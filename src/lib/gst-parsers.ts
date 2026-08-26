@@ -89,14 +89,26 @@ export function processTally(m: TallyMapping) {
   const grouped: Record<string, any> = {};
   let unkCounter = 0;
   const blankGstinRows: any[] = [], blankInvoiceRows: any[] = [];
+  // Row coverage audit
+  let rowsSeen = 0, blankRows = 0;
+  const totalRowsSkipped: any[] = [], noSupplierRows: any[] = [];
 
   for (let i = m.hdrIdx + 1; i < m.raw.length; i++) {
     const r = m.raw[i];
-    if (!r) continue;
-    if (r.every((c: any) => c === null || c === undefined || c === '')) continue;
+    const excelRow = i + 1; // 1-based row number as seen in Excel
+    if (!r) { blankRows++; continue; }
+    rowsSeen++;
+    if (r.every((c: any) => c === null || c === undefined || c === '')) { blankRows++; rowsSeen--; continue; }
     const supplier = normalise(String(r[m.trade] || ''));
-    if (!supplier || supplier.toLowerCase().includes('grand total') ||
-        supplier.toLowerCase().includes('sub total') || supplier.toLowerCase().includes('subtotal')) continue;
+    const sLower = supplier.toLowerCase();
+    if (sLower.includes('grand total') || sLower.includes('sub total') || sLower.includes('subtotal')) {
+      totalRowsSkipped.push({ row: excelRow, value: supplier });
+      continue;
+    }
+    if (!supplier) {
+      noSupplierRows.push({ row: excelRow, invoiceNum: normalise(String(r[m.invoice] || '')), gstin: normalise(String(r[m.gstin] || '')) });
+      continue;
+    }
 
     const invoiceNum = normalise(String(r[m.invoice] || ''));
     const gstin = normalise(String(r[m.gstin] || ''));
@@ -133,8 +145,10 @@ export function processTally(m: TallyMapping) {
         invoiceDate: excelSerialToDate(r[m.date]),
         taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0,
         docType,
+        _srcRows: [] as number[],
       };
     }
+    grouped[key]._srcRows.push(excelRow);
 
     m.taxable.forEach(c => { grouped[key].taxable += numVal(r[c]); });
     m.igst.forEach(c => { grouped[key].igst += numVal(r[c]); });
@@ -152,8 +166,26 @@ export function processTally(m: TallyMapping) {
       });
     });
   }
-  return { rows, blankGstinRows, blankInvoiceRows };
+  const rowsUsed = rows.reduce((s, r) => s + (r._srcRows?.length || 0), 0);
+  const mergedGroups = rows.filter(r => (r._srcRows?.length || 0) > 1);
+  const audit = {
+    rowsRead: rowsSeen,
+    blankRows,
+    totalRowsSkipped,
+    noSupplierRows,
+    rowsUsed,
+    groups: rows.length,
+    invoiceGroups: rows.filter(r => (r.docType || 'invoice') === 'invoice').length,
+    noteGroups: rows.filter(r => (r.docType || 'invoice') !== 'invoice').length,
+    mergedGroups: mergedGroups.length,
+    mergedRows: mergedGroups.reduce((s, r) => s + r._srcRows.length, 0),
+    mergedSamples: mergedGroups.slice(0, 20).map(r => ({
+      gstin: r.gstin, invoiceNum: r.invoiceNum, rows: r._srcRows.join(', '), count: r._srcRows.length,
+    })),
+  };
+  return { rows, blankGstinRows, blankInvoiceRows, audit };
 }
+
 
 
 // ═══════════════════════════════════════════════════════════
@@ -183,25 +215,33 @@ export function scanGSTR2B(wb: any, sheetName?: string): GSTRScanResult {
   let hdr1 = -1;
   let headerFallback = false;
 
-  for (let i = 0; i < Math.min(15, raw.length); i++) {
+  const SCAN_DEPTH = Math.min(30, raw.length);
+  for (let i = 0; i < SCAN_DEPTH; i++) {
     if (raw[i] && raw[i].some((c: any) => c && String(c).toLowerCase().includes('gstin of supplier'))) { hdr1 = i; break; }
   }
   if (hdr1 === -1) {
-    for (let i = 0; i < Math.min(20, raw.length); i++) {
+    // Scored fuzzy detection — pick the row with the most header-like keywords
+    const KW = ['gstin', 'gstn', 'gst no', 'gst number', 'invoice', 'bill no', 'doc no', 'document no',
+      'document number', 'note no', 'note number', 'taxable', 'tax amount', 'supplier', 'party',
+      'trade', 'particulars', 'igst', 'cgst', 'sgst', 'cess', 'date', 'value'];
+    let bestIdx = -1, bestHits = 0;
+    for (let i = 0; i < SCAN_DEPTH; i++) {
       if (!raw[i]) continue;
       const rowStr = raw[i].map((c: any) => String(c || '').toLowerCase()).join('|');
-      const hits = ['gstin', 'invoice', 'note', 'taxable', 'supplier'].filter(kw => rowStr.includes(kw)).length;
-      if (hits >= 2) { hdr1 = i; headerFallback = true; break; }
+      const hits = KW.filter(kw => rowStr.includes(kw)).length;
+      if (hits > bestHits) { bestHits = hits; bestIdx = i; }
     }
+    if (bestIdx >= 0 && bestHits >= 2) { hdr1 = bestIdx; headerFallback = true; }
   }
 
   if (hdr1 === -1) {
-    for (let i = 0; i < Math.min(20, raw.length); i++) {
+    for (let i = 0; i < SCAN_DEPTH; i++) {
       if (raw[i] && raw[i].some((c: any) => c && (String(c).toLowerCase().includes('gstin') || String(c).toLowerCase().includes('gstn')))) {
         hdr1 = i; headerFallback = true; break;
       }
     }
   }
+
   if (hdr1 === -1) throw new Error('Could not find header row in GSTR-2B file. Expected "GSTIN of supplier" column.');
 
   const r1 = raw[hdr1], r2 = raw[hdr1 + 1] || [];
@@ -369,6 +409,19 @@ export function parseGSTR2B(scan: GSTRScanResult): any[] {
   return groupOrder.map(k => grouped[k]);
 }
 
+/** Same as parseGSTR2B but also reports how many raw data rows were read. */
+export function parseGSTR2BWithStats(scan: GSTRScanResult): { rows: any[]; rowsRead: number; blankRows: number } {
+  const { raw, dataStartIdx } = scan;
+  let rowsRead = 0, blankRows = 0;
+  for (let i = dataStartIdx; i < raw.length; i++) {
+    const r = raw[i];
+    if (!r || r.every((c: any) => c === null || c === undefined || c === '')) { blankRows++; continue; }
+    rowsRead++;
+  }
+  return { rows: parseGSTR2B(scan), rowsRead, blankRows };
+}
+
+
 // ═══════════════════════════════════════════════════════════
 // GSTR-2B SHEET CLASSIFICATION (B2B vs B2B-CDNR) — Option 2 only
 // ═══════════════════════════════════════════════════════════
@@ -407,14 +460,27 @@ export function classifyGSTR2BSheets(wb: any): GSTR2BSheetMap {
   return { b2bSheet, cdnrSheet, amendmentSheets, allSheets: names };
 }
 
+/** Row count (excluding fully blank rows) per sheet — used by the sheet picker. */
+export function sheetRowCounts(wb: any): Record<string, number> {
+  const out: Record<string, number> = {};
+  (wb?.SheetNames || []).forEach((n: string) => {
+    try {
+      const raw = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: null, raw: true }) as any[][];
+      out[n] = raw.filter(r => r && !r.every((c: any) => c === null || c === undefined || c === '')).length;
+    } catch { out[n] = 0; }
+  });
+  return out;
+}
+
 /**
  * Parse a GSTR-2B CDNR (credit/debit note) sheet into GSTR-2B-shaped rows.
  * Sign convention: supplier credit note reduces ITC → negative amounts.
  * Supplier debit note increases ITC → positive amounts.
  */
-export function parseGSTR2BNotes(scan: GSTRScanResult): any[] {
+export function parseGSTR2BNotes(scan: GSTRScanResult, noteTypeColOverride?: string | null): any[] {
   const rows = parseGSTR2B(scan);
-  const { raw, allHeaders: hdrs, dataStartIdx, noteTypeCol } = scan;
+  const { raw, allHeaders: hdrs, dataStartIdx } = scan;
+  const noteTypeCol = noteTypeColOverride !== undefined ? noteTypeColOverride : scan.noteTypeCol;
   const noteIdx = noteTypeCol ? hdrs.indexOf(noteTypeCol) : -1;
 
   // Build a GSTIN||note-no → note type lookup from the raw rows
@@ -433,7 +499,11 @@ export function parseGSTR2BNotes(scan: GSTRScanResult): any[] {
   const AMT_COLS = ['Invoice Value(₹)', 'Taxable Value (₹)', 'Integrated Tax(₹)', 'Central Tax(₹)', 'State/UT Tax(₹)', 'Cess(₹)'];
   return rows.map(row => {
     const key = String(row['GSTIN of supplier'] || '').trim() + '||' + String(row['Invoice number'] || '').trim();
-    const docType: DocType = typeByKey[key] || 'credit_note';
+    // No note-type column at all (custom file) → infer from the sign:
+    // negative amounts = credit note (ITC reduction), positive = debit note.
+    const inferred: DocType = numVal(row['Taxable Value (₹)']) < 0 || numVal(row['Integrated Tax(₹)']) + numVal(row['Central Tax(₹)']) + numVal(row['State/UT Tax(₹)']) < 0
+      ? 'credit_note' : (noteIdx >= 0 ? 'credit_note' : 'debit_note');
+    const docType: DocType = typeByKey[key] || inferred;
     const out = { ...row, docType };
     AMT_COLS.forEach(c => {
       const v = numVal(out[c]);
@@ -443,6 +513,7 @@ export function parseGSTR2BNotes(scan: GSTRScanResult): any[] {
     return out;
   });
 }
+
 
 
 

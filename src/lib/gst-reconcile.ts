@@ -640,3 +640,57 @@ export function buildNetITCSummary(invoiceOutput: any[], noteOutput: any[]) {
     };
   }).sort((a: any, b: any) => Math.abs(b['Difference (2B - Books)']) - Math.abs(a['Difference (2B - Books)']));
 }
+
+// ═══════════════════════════════════════════════════════════
+// ROW COVERAGE AUDIT — explains why output rows < input rows
+// ═══════════════════════════════════════════════════════════
+
+export interface RowAuditInput {
+  tallyAudit: any;
+  gstrStats?: { rowsRead: number; blankRows: number } | null;
+  gstrGroups?: number;
+  cdnrStats?: { rowsRead: number; blankRows: number } | null;
+  cdnrGroups?: number;
+  recoRowCount?: number;
+  noteRowCount?: number;
+}
+
+/** Flat rows for the on-screen Row Coverage panel and the "Row Audit" sheet. */
+export function buildRowAudit(input: RowAuditInput) {
+  const a = input.tallyAudit || {};
+  const rows: any[] = [];
+  const add = (section: string, item: string, count: any, details = '') =>
+    rows.push({ Section: section, Item: item, Count: count, Details: details });
+
+  const PR = 'Purchase file';
+  add(PR, 'Data rows read (after the header row)', a.rowsRead ?? 0, '');
+  add(PR, 'Blank rows skipped', a.blankRows ?? 0, 'Completely empty rows');
+  add(PR, 'Total / sub-total rows skipped', (a.totalRowsSkipped || []).length,
+    (a.totalRowsSkipped || []).slice(0, 25).map((r: any) => `row ${r.row}`).join(', '));
+  add(PR, 'Rows skipped — no supplier / party name', (a.noSupplierRows || []).length,
+    (a.noSupplierRows || []).slice(0, 25).map((r: any) => `row ${r.row}${r.invoiceNum ? ` (${r.invoiceNum})` : ''}`).join(', '));
+  add(PR, 'Rows actually used', a.rowsUsed ?? 0, 'Every one of these rows is included in the output figures');
+  add(PR, 'Rows merged into a single invoice / note', a.mergedRows ?? 0,
+    `${a.mergedGroups ?? 0} documents had more than one line (multi-rate bills) and were summed`);
+  add(PR, 'Invoice groups after merging', a.invoiceGroups ?? 0, '');
+  add(PR, 'Debit / credit note groups after merging', a.noteGroups ?? 0, '');
+
+  if (input.gstrStats) {
+    add('GSTR-2B (B2B)', 'Data rows read', input.gstrStats.rowsRead, '');
+    add('GSTR-2B (B2B)', 'Blank rows skipped', input.gstrStats.blankRows, '');
+    add('GSTR-2B (B2B)', 'Invoice groups after merging', input.gstrGroups ?? 0, 'Same GSTIN + invoice number rows are summed');
+  }
+  if (input.cdnrStats) {
+    add('GSTR-2B (Notes)', 'Data rows read', input.cdnrStats.rowsRead, '');
+    add('GSTR-2B (Notes)', 'Blank rows skipped', input.cdnrStats.blankRows, '');
+    add('GSTR-2B (Notes)', 'Note groups after merging', input.cdnrGroups ?? 0, '');
+  }
+  add('Output', 'Reconciliation Output lines', input.recoRowCount ?? 0, '');
+  if (input.noteRowCount) add('Output', 'Debit / Credit Note lines', input.noteRowCount, '');
+
+  (a.mergedSamples || []).forEach((s: any) => {
+    add('Merged documents (sample)', `${s.gstin || '(no GSTIN)'} — ${s.invoiceNum}`, s.count, `Purchase file rows: ${s.rows}`);
+  });
+
+  return rows;
+}

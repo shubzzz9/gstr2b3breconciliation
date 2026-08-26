@@ -460,14 +460,27 @@ export function classifyGSTR2BSheets(wb: any): GSTR2BSheetMap {
   return { b2bSheet, cdnrSheet, amendmentSheets, allSheets: names };
 }
 
+/** Row count (excluding fully blank rows) per sheet — used by the sheet picker. */
+export function sheetRowCounts(wb: any): Record<string, number> {
+  const out: Record<string, number> = {};
+  (wb?.SheetNames || []).forEach((n: string) => {
+    try {
+      const raw = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: null, raw: true }) as any[][];
+      out[n] = raw.filter(r => r && !r.every((c: any) => c === null || c === undefined || c === '')).length;
+    } catch { out[n] = 0; }
+  });
+  return out;
+}
+
 /**
  * Parse a GSTR-2B CDNR (credit/debit note) sheet into GSTR-2B-shaped rows.
  * Sign convention: supplier credit note reduces ITC → negative amounts.
  * Supplier debit note increases ITC → positive amounts.
  */
-export function parseGSTR2BNotes(scan: GSTRScanResult): any[] {
+export function parseGSTR2BNotes(scan: GSTRScanResult, noteTypeColOverride?: string | null): any[] {
   const rows = parseGSTR2B(scan);
-  const { raw, allHeaders: hdrs, dataStartIdx, noteTypeCol } = scan;
+  const { raw, allHeaders: hdrs, dataStartIdx } = scan;
+  const noteTypeCol = noteTypeColOverride !== undefined ? noteTypeColOverride : scan.noteTypeCol;
   const noteIdx = noteTypeCol ? hdrs.indexOf(noteTypeCol) : -1;
 
   // Build a GSTIN||note-no → note type lookup from the raw rows
@@ -486,7 +499,11 @@ export function parseGSTR2BNotes(scan: GSTRScanResult): any[] {
   const AMT_COLS = ['Invoice Value(₹)', 'Taxable Value (₹)', 'Integrated Tax(₹)', 'Central Tax(₹)', 'State/UT Tax(₹)', 'Cess(₹)'];
   return rows.map(row => {
     const key = String(row['GSTIN of supplier'] || '').trim() + '||' + String(row['Invoice number'] || '').trim();
-    const docType: DocType = typeByKey[key] || 'credit_note';
+    // No note-type column at all (custom file) → infer from the sign:
+    // negative amounts = credit note (ITC reduction), positive = debit note.
+    const inferred: DocType = numVal(row['Taxable Value (₹)']) < 0 || numVal(row['Integrated Tax(₹)']) + numVal(row['Central Tax(₹)']) + numVal(row['State/UT Tax(₹)']) < 0
+      ? 'credit_note' : (noteIdx >= 0 ? 'credit_note' : 'debit_note');
+    const docType: DocType = typeByKey[key] || inferred;
     const out = { ...row, docType };
     AMT_COLS.forEach(c => {
       const v = numVal(out[c]);
@@ -496,6 +513,7 @@ export function parseGSTR2BNotes(scan: GSTRScanResult): any[] {
     return out;
   });
 }
+
 
 
 

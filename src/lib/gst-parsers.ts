@@ -89,14 +89,26 @@ export function processTally(m: TallyMapping) {
   const grouped: Record<string, any> = {};
   let unkCounter = 0;
   const blankGstinRows: any[] = [], blankInvoiceRows: any[] = [];
+  // Row coverage audit
+  let rowsSeen = 0, blankRows = 0;
+  const totalRowsSkipped: any[] = [], noSupplierRows: any[] = [];
 
   for (let i = m.hdrIdx + 1; i < m.raw.length; i++) {
     const r = m.raw[i];
-    if (!r) continue;
-    if (r.every((c: any) => c === null || c === undefined || c === '')) continue;
+    const excelRow = i + 1; // 1-based row number as seen in Excel
+    if (!r) { blankRows++; continue; }
+    rowsSeen++;
+    if (r.every((c: any) => c === null || c === undefined || c === '')) { blankRows++; rowsSeen--; continue; }
     const supplier = normalise(String(r[m.trade] || ''));
-    if (!supplier || supplier.toLowerCase().includes('grand total') ||
-        supplier.toLowerCase().includes('sub total') || supplier.toLowerCase().includes('subtotal')) continue;
+    const sLower = supplier.toLowerCase();
+    if (sLower.includes('grand total') || sLower.includes('sub total') || sLower.includes('subtotal')) {
+      totalRowsSkipped.push({ row: excelRow, value: supplier });
+      continue;
+    }
+    if (!supplier) {
+      noSupplierRows.push({ row: excelRow, invoiceNum: normalise(String(r[m.invoice] || '')), gstin: normalise(String(r[m.gstin] || '')) });
+      continue;
+    }
 
     const invoiceNum = normalise(String(r[m.invoice] || ''));
     const gstin = normalise(String(r[m.gstin] || ''));
@@ -133,8 +145,10 @@ export function processTally(m: TallyMapping) {
         invoiceDate: excelSerialToDate(r[m.date]),
         taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0,
         docType,
+        _srcRows: [] as number[],
       };
     }
+    grouped[key]._srcRows.push(excelRow);
 
     m.taxable.forEach(c => { grouped[key].taxable += numVal(r[c]); });
     m.igst.forEach(c => { grouped[key].igst += numVal(r[c]); });
@@ -152,8 +166,26 @@ export function processTally(m: TallyMapping) {
       });
     });
   }
-  return { rows, blankGstinRows, blankInvoiceRows };
+  const rowsUsed = rows.reduce((s, r) => s + (r._srcRows?.length || 0), 0);
+  const mergedGroups = rows.filter(r => (r._srcRows?.length || 0) > 1);
+  const audit = {
+    rowsRead: rowsSeen,
+    blankRows,
+    totalRowsSkipped,
+    noSupplierRows,
+    rowsUsed,
+    groups: rows.length,
+    invoiceGroups: rows.filter(r => (r.docType || 'invoice') === 'invoice').length,
+    noteGroups: rows.filter(r => (r.docType || 'invoice') !== 'invoice').length,
+    mergedGroups: mergedGroups.length,
+    mergedRows: mergedGroups.reduce((s, r) => s + r._srcRows.length, 0),
+    mergedSamples: mergedGroups.slice(0, 20).map(r => ({
+      gstin: r.gstin, invoiceNum: r.invoiceNum, rows: r._srcRows.join(', '), count: r._srcRows.length,
+    })),
+  };
+  return { rows, blankGstinRows, blankInvoiceRows, audit };
 }
+
 
 
 // ═══════════════════════════════════════════════════════════

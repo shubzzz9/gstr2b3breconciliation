@@ -215,25 +215,33 @@ export function scanGSTR2B(wb: any, sheetName?: string): GSTRScanResult {
   let hdr1 = -1;
   let headerFallback = false;
 
-  for (let i = 0; i < Math.min(15, raw.length); i++) {
+  const SCAN_DEPTH = Math.min(30, raw.length);
+  for (let i = 0; i < SCAN_DEPTH; i++) {
     if (raw[i] && raw[i].some((c: any) => c && String(c).toLowerCase().includes('gstin of supplier'))) { hdr1 = i; break; }
   }
   if (hdr1 === -1) {
-    for (let i = 0; i < Math.min(20, raw.length); i++) {
+    // Scored fuzzy detection — pick the row with the most header-like keywords
+    const KW = ['gstin', 'gstn', 'gst no', 'gst number', 'invoice', 'bill no', 'doc no', 'document no',
+      'document number', 'note no', 'note number', 'taxable', 'tax amount', 'supplier', 'party',
+      'trade', 'particulars', 'igst', 'cgst', 'sgst', 'cess', 'date', 'value'];
+    let bestIdx = -1, bestHits = 0;
+    for (let i = 0; i < SCAN_DEPTH; i++) {
       if (!raw[i]) continue;
       const rowStr = raw[i].map((c: any) => String(c || '').toLowerCase()).join('|');
-      const hits = ['gstin', 'invoice', 'note', 'taxable', 'supplier'].filter(kw => rowStr.includes(kw)).length;
-      if (hits >= 2) { hdr1 = i; headerFallback = true; break; }
+      const hits = KW.filter(kw => rowStr.includes(kw)).length;
+      if (hits > bestHits) { bestHits = hits; bestIdx = i; }
     }
+    if (bestIdx >= 0 && bestHits >= 2) { hdr1 = bestIdx; headerFallback = true; }
   }
 
   if (hdr1 === -1) {
-    for (let i = 0; i < Math.min(20, raw.length); i++) {
+    for (let i = 0; i < SCAN_DEPTH; i++) {
       if (raw[i] && raw[i].some((c: any) => c && (String(c).toLowerCase().includes('gstin') || String(c).toLowerCase().includes('gstn')))) {
         hdr1 = i; headerFallback = true; break;
       }
     }
   }
+
   if (hdr1 === -1) throw new Error('Could not find header row in GSTR-2B file. Expected "GSTIN of supplier" column.');
 
   const r1 = raw[hdr1], r2 = raw[hdr1 + 1] || [];

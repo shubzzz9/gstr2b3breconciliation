@@ -409,6 +409,19 @@ export function parseGSTR2B(scan: GSTRScanResult): any[] {
   return groupOrder.map(k => grouped[k]);
 }
 
+/** Same as parseGSTR2B but also reports how many raw data rows were read. */
+export function parseGSTR2BWithStats(scan: GSTRScanResult): { rows: any[]; rowsRead: number; blankRows: number } {
+  const { raw, dataStartIdx } = scan;
+  let rowsRead = 0, blankRows = 0;
+  for (let i = dataStartIdx; i < raw.length; i++) {
+    const r = raw[i];
+    if (!r || r.every((c: any) => c === null || c === undefined || c === '')) { blankRows++; continue; }
+    rowsRead++;
+  }
+  return { rows: parseGSTR2B(scan), rowsRead, blankRows };
+}
+
+
 // ═══════════════════════════════════════════════════════════
 // GSTR-2B SHEET CLASSIFICATION (B2B vs B2B-CDNR) — Option 2 only
 // ═══════════════════════════════════════════════════════════

@@ -552,6 +552,41 @@ const Tool = () => {
               {mode === 'full' && gstrScan && (
                 <div className="mb-6">
                   <h3 className="text-sm font-bold text-primary bg-secondary p-2 rounded mb-2">🏛️ GSTR-2B — Column Mapping</h3>
+                  {gstrWB && (gstrWB.SheetNames || []).length > 1 && (() => {
+                    const counts = sheetRowCounts(gstrWB);
+                    const names: string[] = gstrWB.SheetNames || [];
+                    const label = (n: string) => `${n} (${counts[n] ?? 0} rows)`;
+                    return (
+                      <div className="grid sm:grid-cols-2 gap-3 mb-3">
+                        <div>
+                          <label className="block text-[11px] font-semibold mb-1">Invoice sheet (B2B)</label>
+                          <select className="w-full p-1.5 border border-input rounded text-xs bg-background"
+                            value={gstrScan.sheetName || ''}
+                            onChange={e => {
+                              try {
+                                const s = scanGSTR2B(gstrWB, e.target.value);
+                                setGstrScan(s); setGstrDetected({ ...s.detected });
+                              } catch (err: any) { setError(err.message); }
+                            }}>
+                            {names.map(n => <option key={n} value={n}>{label(n)}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold mb-1">Debit / credit note sheet</label>
+                          <select className="w-full p-1.5 border border-input rounded text-xs bg-background"
+                            value={(cdnrScan && !cdnrWB ? cdnrScan.sheetName : '') || ''}
+                            onChange={e => {
+                              if (!e.target.value) { setCdnrScan(cdnrWB ? scanGSTR2B(cdnrWB) : null); return; }
+                              try { setCdnrScan(scanGSTR2B(gstrWB, e.target.value)); }
+                              catch (err: any) { setError(err.message); }
+                            }}>
+                            <option value="">{cdnrWB ? `Uploaded file (${cdnrName})` : 'None'}</option>
+                            {names.map(n => <option key={n} value={n}>{label(n)}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <div className="flex flex-wrap gap-2 mb-3 text-[11px]">
                     <span className="px-2 py-0.5 rounded-full bg-success/15 text-success font-semibold">B2B sheet: {sheetMap?.b2bSheet || gstrScan.sheetName || 'Sheet 1'}</span>
                     {cdnrScan

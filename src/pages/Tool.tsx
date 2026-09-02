@@ -908,8 +908,9 @@ const Tool = () => {
                       <div>• Remarks Guide — <strong>7</strong> rows</div>
                       {noteRows && noteRows.length > 0 && <div>• Debit / Credit Notes — <strong>{noteRows.length}</strong> rows</div>}
                       {netITC && netITC.length > 0 && <div>• Net ITC Summary — <strong>{netITC.length}</strong> suppliers</div>}
+                      {rowAudit && rowAudit.length > 0 && <div>• Row Audit — <strong>{rowAudit.length}</strong> rows</div>}
                     </div>
-                    <button onClick={() => handleDownload('file2', () => downloadFile2(recoRows, gstrScan?.extraCols, noteRows || [], netITC || []))} className="btn-tool bg-success text-success-foreground hover:opacity-90">💾 Download</button>
+                    <button onClick={() => handleDownload('file2', () => downloadFile2(recoRows, gstrScan?.extraCols, noteRows || [], netITC || [], rowAudit || []))} className="btn-tool bg-success text-success-foreground hover:opacity-90">💾 Download</button>
                   </div>
                 )}
                 {(mode === 'full' || mode === 'combined') && diagData && (

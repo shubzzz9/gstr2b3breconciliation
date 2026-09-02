@@ -852,6 +852,39 @@ const Tool = () => {
                 </div>
               )}
 
+              {rowAudit && rowAudit.length > 0 && (
+                <div className="mb-6">
+                  <button onClick={() => setShowAudit(v => !v)}
+                    className="text-sm font-bold text-primary flex items-center gap-2">
+                    🧮 Row Coverage — where every input row went <span className="text-xs font-normal text-muted-foreground">({showAudit ? 'hide' : 'show'})</span>
+                  </button>
+                  {showAudit && (
+                    <div className="mt-2 relative w-full overflow-auto border border-border rounded max-h-[340px]">
+                      <table className="w-full border-collapse text-[11px]">
+                        <thead className="sticky top-0">
+                          <tr>
+                            {['Section', 'Item', 'Count', 'Details'].map(h => (
+                              <th key={h} className="bg-secondary p-1.5 border border-border font-semibold text-left whitespace-nowrap">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rowAudit.map((r: any, i: number) => (
+                            <tr key={i}>
+                              <td className="p-1.5 border border-border whitespace-nowrap font-medium">{r.Section}</td>
+                              <td className="p-1.5 border border-border">{r.Item}</td>
+                              <td className="p-1.5 border border-border text-right font-semibold">{r.Count}</td>
+                              <td className="p-1.5 border border-border text-muted-foreground">{r.Details}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <hr className="border-border my-4" />
+                </div>
+              )}
+
               <h3 className="text-sm font-bold text-primary mb-3">Download Files</h3>
               <div className="flex flex-wrap gap-4">
                 {(mode === 'tally' || mode === 'full' || mode === 'combined') && tallyData && (

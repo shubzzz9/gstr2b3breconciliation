@@ -3,8 +3,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import XLSX from 'xlsx-js-style';
-import { scanTally, processTally, scanGSTR2B, parseGSTR2B, parseCombined, parsePurchaseRegister, parseTally4, reParseCombined, reParsePR, reParseTally4, classifyGSTR2BSheets, parseGSTR2BNotes } from '@/lib/gst-parsers';
-import { reconcile, diagnoseMismatches, reconcilePRTally, reconcileNotes, diagnoseNotes, buildNetITCSummary } from '@/lib/gst-reconcile';
+import { scanTally, processTally, scanGSTR2B, parseGSTR2B, parseGSTR2BWithStats, sheetRowCounts, parseCombined, parsePurchaseRegister, parseTally4, reParseCombined, reParsePR, reParseTally4, classifyGSTR2BSheets, parseGSTR2BNotes } from '@/lib/gst-parsers';
+import { reconcile, diagnoseMismatches, reconcilePRTally, reconcileNotes, diagnoseNotes, buildNetITCSummary, buildRowAudit } from '@/lib/gst-reconcile';
 import { downloadFile1, downloadFile2, downloadFile3, downloadPRTallyAudit } from '@/lib/gst-downloads';
 import { TALLY_SINGLE_ROWS, TALLY_MULTI_ROWS, TALLY_NOTE_ROW, GSTR_STD_COLS } from '@/lib/gst-helpers';
 import { generateFingerprint } from '@/lib/fingerprint';
@@ -68,6 +68,8 @@ const Tool = () => {
   const [noteRows, setNoteRows] = useState<any>(null);
   const [noteDiag, setNoteDiag] = useState<any>(null);
   const [netITC, setNetITC] = useState<any>(null);
+  const [rowAudit, setRowAudit] = useState<any[] | null>(null);
+  const [showAudit, setShowAudit] = useState(false);
 
   // Mappings
   const [singleMap, setSingleMap] = useState<Record<string, number>>({});
@@ -283,7 +285,8 @@ const Tool = () => {
         setProgress(50);
         // Use the user-edited mapping
         const editedScan = { ...gstrScan, detected: gstrDetected };
-        const gstrRows = parseGSTR2B(editedScan);
+        const gstrStats = parseGSTR2BWithStats(editedScan);
+        const gstrRows = gstrStats.rows;
         setProgressLabel('Reconciling...');
         setProgress(70);
         const reco = reconcile(gstrRows, invoiceRows, editedScan.extraCols);
@@ -293,17 +296,36 @@ const Tool = () => {
         const diag = diagnoseMismatches(gstrRows, invoiceRows, reco);
         setDiagData(diag);
 
+        let nReco: any[] = [];
+        let cdnrStats: any = null;
+        let cdnrRows: any[] = [];
         if (wantNotes) {
           setProgressLabel('Reconciling debit / credit notes...');
           setProgress(92);
-          const cdnrRows = cdnrScan ? parseGSTR2BNotes(cdnrScan) : [];
-          const nReco = reconcileNotes(cdnrRows, ourNoteRows, cdnrScan?.extraCols || []);
+          cdnrRows = cdnrScan ? parseGSTR2BNotes(cdnrScan) : [];
+          if (cdnrScan) {
+            const s = parseGSTR2BWithStats(cdnrScan);
+            cdnrStats = { rowsRead: s.rowsRead, blankRows: s.blankRows };
+          }
+          nReco = reconcileNotes(cdnrRows, ourNoteRows, cdnrScan?.extraCols || []);
           setNoteRows(nReco);
           setNoteDiag(diagnoseNotes(nReco));
           setNetITC(buildNetITCSummary(reco, nReco));
         } else {
           setNoteRows(null); setNoteDiag(null); setNetITC(null);
         }
+
+        setRowAudit(buildRowAudit({
+          tallyAudit: tResult.audit,
+          gstrStats: { rowsRead: gstrStats.rowsRead, blankRows: gstrStats.blankRows },
+          gstrGroups: gstrRows.length,
+          cdnrStats,
+          cdnrGroups: cdnrRows.length,
+          recoRowCount: reco.length,
+          noteRowCount: nReco.length,
+        }));
+      } else {
+        setRowAudit(buildRowAudit({ tallyAudit: tResult.audit }));
       }
       setProgress(100);
       setStep(4);
@@ -321,6 +343,7 @@ const Tool = () => {
     setPrHeaders([]); setTally4Headers([]);
     setCdnrWB(null); setCdnrName(''); setCdnrScan(null); setSheetMap(null);
     setNoteRows(null); setNoteDiag(null); setNetITC(null);
+    setRowAudit(null); setShowAudit(false);
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="spinner" /></div>;
@@ -529,6 +552,41 @@ const Tool = () => {
               {mode === 'full' && gstrScan && (
                 <div className="mb-6">
                   <h3 className="text-sm font-bold text-primary bg-secondary p-2 rounded mb-2">🏛️ GSTR-2B — Column Mapping</h3>
+                  {gstrWB && (gstrWB.SheetNames || []).length > 1 && (() => {
+                    const counts = sheetRowCounts(gstrWB);
+                    const names: string[] = gstrWB.SheetNames || [];
+                    const label = (n: string) => `${n} (${counts[n] ?? 0} rows)`;
+                    return (
+                      <div className="grid sm:grid-cols-2 gap-3 mb-3">
+                        <div>
+                          <label className="block text-[11px] font-semibold mb-1">Invoice sheet (B2B)</label>
+                          <select className="w-full p-1.5 border border-input rounded text-xs bg-background"
+                            value={gstrScan.sheetName || ''}
+                            onChange={e => {
+                              try {
+                                const s = scanGSTR2B(gstrWB, e.target.value);
+                                setGstrScan(s); setGstrDetected({ ...s.detected });
+                              } catch (err: any) { setError(err.message); }
+                            }}>
+                            {names.map(n => <option key={n} value={n}>{label(n)}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold mb-1">Debit / credit note sheet</label>
+                          <select className="w-full p-1.5 border border-input rounded text-xs bg-background"
+                            value={(cdnrScan && !cdnrWB ? cdnrScan.sheetName : '') || ''}
+                            onChange={e => {
+                              if (!e.target.value) { setCdnrScan(cdnrWB ? scanGSTR2B(cdnrWB) : null); return; }
+                              try { setCdnrScan(scanGSTR2B(gstrWB, e.target.value)); }
+                              catch (err: any) { setError(err.message); }
+                            }}>
+                            <option value="">{cdnrWB ? `Uploaded file (${cdnrName})` : 'None'}</option>
+                            {names.map(n => <option key={n} value={n}>{label(n)}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <div className="flex flex-wrap gap-2 mb-3 text-[11px]">
                     <span className="px-2 py-0.5 rounded-full bg-success/15 text-success font-semibold">B2B sheet: {sheetMap?.b2bSheet || gstrScan.sheetName || 'Sheet 1'}</span>
                     {cdnrScan
@@ -794,6 +852,39 @@ const Tool = () => {
                 </div>
               )}
 
+              {rowAudit && rowAudit.length > 0 && (
+                <div className="mb-6">
+                  <button onClick={() => setShowAudit(v => !v)}
+                    className="text-sm font-bold text-primary flex items-center gap-2">
+                    🧮 Row Coverage — where every input row went <span className="text-xs font-normal text-muted-foreground">({showAudit ? 'hide' : 'show'})</span>
+                  </button>
+                  {showAudit && (
+                    <div className="mt-2 relative w-full overflow-auto border border-border rounded max-h-[340px]">
+                      <table className="w-full border-collapse text-[11px]">
+                        <thead className="sticky top-0">
+                          <tr>
+                            {['Section', 'Item', 'Count', 'Details'].map(h => (
+                              <th key={h} className="bg-secondary p-1.5 border border-border font-semibold text-left whitespace-nowrap">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rowAudit.map((r: any, i: number) => (
+                            <tr key={i}>
+                              <td className="p-1.5 border border-border whitespace-nowrap font-medium">{r.Section}</td>
+                              <td className="p-1.5 border border-border">{r.Item}</td>
+                              <td className="p-1.5 border border-border text-right font-semibold">{r.Count}</td>
+                              <td className="p-1.5 border border-border text-muted-foreground">{r.Details}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <hr className="border-border my-4" />
+                </div>
+              )}
+
               <h3 className="text-sm font-bold text-primary mb-3">Download Files</h3>
               <div className="flex flex-wrap gap-4">
                 {(mode === 'tally' || mode === 'full' || mode === 'combined') && tallyData && (
@@ -817,8 +908,9 @@ const Tool = () => {
                       <div>• Remarks Guide — <strong>7</strong> rows</div>
                       {noteRows && noteRows.length > 0 && <div>• Debit / Credit Notes — <strong>{noteRows.length}</strong> rows</div>}
                       {netITC && netITC.length > 0 && <div>• Net ITC Summary — <strong>{netITC.length}</strong> suppliers</div>}
+                      {rowAudit && rowAudit.length > 0 && <div>• Row Audit — <strong>{rowAudit.length}</strong> rows</div>}
                     </div>
-                    <button onClick={() => handleDownload('file2', () => downloadFile2(recoRows, gstrScan?.extraCols, noteRows || [], netITC || []))} className="btn-tool bg-success text-success-foreground hover:opacity-90">💾 Download</button>
+                    <button onClick={() => handleDownload('file2', () => downloadFile2(recoRows, gstrScan?.extraCols, noteRows || [], netITC || [], rowAudit || []))} className="btn-tool bg-success text-success-foreground hover:opacity-90">💾 Download</button>
                   </div>
                 )}
                 {(mode === 'full' || mode === 'combined') && diagData && (

@@ -175,7 +175,7 @@ export function downloadFile1(tallyData: any[]) {
 // FILE 2: RECONCILIATION OUTPUT + REMARKS GUIDE
 // ═══════════════════════════════════════════════════════════
 
-export function downloadFile2(recoRows: any[], extraCols: any[] = [], noteRows: any[] = [], netITC: any[] = []) {
+export function downloadFile2(recoRows: any[], extraCols: any[] = [], noteRows: any[] = [], netITC: any[] = [], rowAudit: any[] = []) {
   if (!recoRows) return;
   const cols = [...GSTR_STD_COLS, ...extraCols.filter(e => e.include).map(e => e.gstrCol), 'DATA', 'Remarks'];
   const ws = makeStyledSheet(recoRows, cols);
@@ -195,6 +195,16 @@ export function downloadFile2(recoRows: any[], extraCols: any[] = [], noteRows: 
     wsNet['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
     XLSX.utils.book_append_sheet(wb, wsNet, 'Net ITC Summary');
   }
+
+  if (rowAudit && rowAudit.length) {
+    const auditCols = ['Section', 'Item', 'Count', 'Details'];
+    const wsAudit = makeStyledSheet(rowAudit, auditCols);
+    wsAudit['!cols'] = [{ wch: 26 }, { wch: 46 }, { wch: 10 }, { wch: 80 }];
+    wsAudit['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
+    XLSX.utils.book_append_sheet(wb, wsAudit, 'Row Audit');
+  }
+
+
 
 
   // Remarks Legend sheet

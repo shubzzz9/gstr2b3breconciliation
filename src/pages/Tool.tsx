@@ -285,7 +285,8 @@ const Tool = () => {
         setProgress(50);
         // Use the user-edited mapping
         const editedScan = { ...gstrScan, detected: gstrDetected };
-        const gstrRows = parseGSTR2B(editedScan);
+        const gstrStats = parseGSTR2BWithStats(editedScan);
+        const gstrRows = gstrStats.rows;
         setProgressLabel('Reconciling...');
         setProgress(70);
         const reco = reconcile(gstrRows, invoiceRows, editedScan.extraCols);
@@ -295,17 +296,36 @@ const Tool = () => {
         const diag = diagnoseMismatches(gstrRows, invoiceRows, reco);
         setDiagData(diag);
 
+        let nReco: any[] = [];
+        let cdnrStats: any = null;
+        let cdnrRows: any[] = [];
         if (wantNotes) {
           setProgressLabel('Reconciling debit / credit notes...');
           setProgress(92);
-          const cdnrRows = cdnrScan ? parseGSTR2BNotes(cdnrScan) : [];
-          const nReco = reconcileNotes(cdnrRows, ourNoteRows, cdnrScan?.extraCols || []);
+          cdnrRows = cdnrScan ? parseGSTR2BNotes(cdnrScan) : [];
+          if (cdnrScan) {
+            const s = parseGSTR2BWithStats(cdnrScan);
+            cdnrStats = { rowsRead: s.rowsRead, blankRows: s.blankRows };
+          }
+          nReco = reconcileNotes(cdnrRows, ourNoteRows, cdnrScan?.extraCols || []);
           setNoteRows(nReco);
           setNoteDiag(diagnoseNotes(nReco));
           setNetITC(buildNetITCSummary(reco, nReco));
         } else {
           setNoteRows(null); setNoteDiag(null); setNetITC(null);
         }
+
+        setRowAudit(buildRowAudit({
+          tallyAudit: tResult.audit,
+          gstrStats: { rowsRead: gstrStats.rowsRead, blankRows: gstrStats.blankRows },
+          gstrGroups: gstrRows.length,
+          cdnrStats,
+          cdnrGroups: cdnrRows.length,
+          recoRowCount: reco.length,
+          noteRowCount: nReco.length,
+        }));
+      } else {
+        setRowAudit(buildRowAudit({ tallyAudit: tResult.audit }));
       }
       setProgress(100);
       setStep(4);

@@ -343,6 +343,7 @@ const Tool = () => {
     setPrHeaders([]); setTally4Headers([]);
     setCdnrWB(null); setCdnrName(''); setCdnrScan(null); setSheetMap(null);
     setNoteRows(null); setNoteDiag(null); setNetITC(null);
+    setRowAudit(null); setShowAudit(false);
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="spinner" /></div>;

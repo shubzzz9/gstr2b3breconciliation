@@ -196,6 +196,16 @@ export function downloadFile2(recoRows: any[], extraCols: any[] = [], noteRows: 
     XLSX.utils.book_append_sheet(wb, wsNet, 'Net ITC Summary');
   }
 
+  if (rowAudit && rowAudit.length) {
+    const auditCols = ['Section', 'Item', 'Count', 'Details'];
+    const wsAudit = makeStyledSheet(rowAudit, auditCols);
+    wsAudit['!cols'] = [{ wch: 26 }, { wch: 46 }, { wch: 10 }, { wch: 80 }];
+    wsAudit['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
+    XLSX.utils.book_append_sheet(wb, wsAudit, 'Row Audit');
+  }
+
+
+
 
   // Remarks Legend sheet
   const legendRows = [

@@ -68,6 +68,8 @@ const Tool = () => {
   const [noteRows, setNoteRows] = useState<any>(null);
   const [noteDiag, setNoteDiag] = useState<any>(null);
   const [netITC, setNetITC] = useState<any>(null);
+  const [rowAudit, setRowAudit] = useState<any[] | null>(null);
+  const [showAudit, setShowAudit] = useState(false);
 
   // Mappings
   const [singleMap, setSingleMap] = useState<Record<string, number>>({});

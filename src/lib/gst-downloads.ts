@@ -175,7 +175,7 @@ export function downloadFile1(tallyData: any[]) {
 // FILE 2: RECONCILIATION OUTPUT + REMARKS GUIDE
 // ═══════════════════════════════════════════════════════════
 
-export function downloadFile2(recoRows: any[], extraCols: any[] = [], noteRows: any[] = [], netITC: any[] = []) {
+export function downloadFile2(recoRows: any[], extraCols: any[] = [], noteRows: any[] = [], netITC: any[] = [], rowAudit: any[] = []) {
   if (!recoRows) return;
   const cols = [...GSTR_STD_COLS, ...extraCols.filter(e => e.include).map(e => e.gstrCol), 'DATA', 'Remarks'];
   const ws = makeStyledSheet(recoRows, cols);

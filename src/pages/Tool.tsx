@@ -233,6 +233,8 @@ const Tool = () => {
         if (map.cdnrSheet) nScan = scanGSTR2B(gstrWB, map.cdnrSheet);
         else if (cdnrWB) nScan = scanGSTR2B(cdnrWB);
         setCdnrScan(nScan);
+        setCdnrDetected(nScan ? { ...nScan.detected } : {});
+        setCdnrNoteTypeCol(nScan?.noteTypeCol || '');
       }
       setStep(2);
     } catch (e: any) { setError(e.message); }

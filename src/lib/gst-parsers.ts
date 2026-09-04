@@ -250,11 +250,30 @@ export function scanGSTR2B(wb: any, sheetName?: string): GSTRScanResult {
   const r1IsStandaloneHeader = GSTIN_RE.test(r2FirstVal);
   const dataStartIdx = hdr1 + (r1IsStandaloneHeader ? 1 : 2);
 
-  const hdrs = r1.map((h: any, i: number) => {
-    const sub = r2[i];
-    const useSubRow = !r1IsStandaloneHeader && sub && String(sub).trim() && String(sub) !== 'null';
-    return useSubRow ? String(sub).trim() : String(h || '').trim();
-  }).filter((h: string) => h);
+  // Build one header per column index — never drop blanks (that shifts columns).
+  // Merged parent headers are forward-filled; blank columns get an Excel-letter placeholder;
+  // duplicate names are made unique so value lookup by name stays correct.
+  const colLetter = (i: number) => {
+    let s = '', n = i;
+    do { s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26) - 1; } while (n >= 0);
+    return s;
+  };
+  const width = Math.max(r1.length, r2.length, ...raw.slice(dataStartIdx, dataStartIdx + 20).map(r => (r ? r.length : 0)));
+  let parent = '';
+  const seen: Record<string, number> = {};
+  const hdrs: string[] = [];
+  for (let i = 0; i < width; i++) {
+    const top = String(r1[i] ?? '').trim();
+    if (top) parent = top;
+    const sub = r1IsStandaloneHeader ? '' : String(r2[i] ?? '').trim();
+    let name = sub && sub !== 'null' ? sub : top;
+    if (!name) name = r1IsStandaloneHeader ? '' : (parent ? '' : '');
+    if (!name) name = `Column ${colLetter(i)}`;
+    if (seen[name]) { seen[name]++; name = `${name} (${seen[name]})`; }
+    else seen[name] = 1;
+    hdrs.push(name);
+  }
+
 
   const GSTR_FUZZY_KW: Record<string, string[]> = {
     'GSTIN of supplier': ['gstin of supplier', 'gstin of supp', 'gstin', 'gst no', 'gst num'],
@@ -293,7 +312,7 @@ export function scanGSTR2B(wb: any, sheetName?: string): GSTRScanResult {
   });
 
   const usedHdrs = new Set(Object.values(det).filter(Boolean));
-  const extraCols = hdrs.filter((h: string) => !usedHdrs.has(h)).map((h: string) => ({
+  const extraCols = hdrs.filter((h: string) => !usedHdrs.has(h) && !/^Column [A-Z]+( \(\d+\))?$/.test(h)).map((h: string) => ({
     gstrCol: h, tallyCol: '', include: false,
   }));
 

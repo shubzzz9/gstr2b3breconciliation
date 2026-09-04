@@ -64,6 +64,8 @@ const Tool = () => {
   const [cdnrWB, setCdnrWB] = useState<any>(null);
   const [cdnrName, setCdnrName] = useState('');
   const [cdnrScan, setCdnrScan] = useState<any>(null);
+  const [cdnrDetected, setCdnrDetected] = useState<Record<string, string | null>>({});
+  const [cdnrNoteTypeCol, setCdnrNoteTypeCol] = useState<string>('');
   const [sheetMap, setSheetMap] = useState<any>(null);
   const [noteRows, setNoteRows] = useState<any>(null);
   const [noteDiag, setNoteDiag] = useState<any>(null);
@@ -231,6 +233,8 @@ const Tool = () => {
         if (map.cdnrSheet) nScan = scanGSTR2B(gstrWB, map.cdnrSheet);
         else if (cdnrWB) nScan = scanGSTR2B(cdnrWB);
         setCdnrScan(nScan);
+        setCdnrDetected(nScan ? { ...nScan.detected } : {});
+        setCdnrNoteTypeCol(nScan?.noteTypeCol || '');
       }
       setStep(2);
     } catch (e: any) { setError(e.message); }
@@ -302,12 +306,13 @@ const Tool = () => {
         if (wantNotes) {
           setProgressLabel('Reconciling debit / credit notes...');
           setProgress(92);
-          cdnrRows = cdnrScan ? parseGSTR2BNotes(cdnrScan) : [];
-          if (cdnrScan) {
-            const s = parseGSTR2BWithStats(cdnrScan);
+          const editedCdnr = cdnrScan ? { ...cdnrScan, detected: { ...cdnrScan.detected, ...cdnrDetected } } : null;
+          cdnrRows = editedCdnr ? parseGSTR2BNotes(editedCdnr, cdnrNoteTypeCol || null) : [];
+          if (editedCdnr) {
+            const s = parseGSTR2BWithStats(editedCdnr);
             cdnrStats = { rowsRead: s.rowsRead, blankRows: s.blankRows };
           }
-          nReco = reconcileNotes(cdnrRows, ourNoteRows, cdnrScan?.extraCols || []);
+          nReco = reconcileNotes(cdnrRows, ourNoteRows, editedCdnr?.extraCols || []);
           setNoteRows(nReco);
           setNoteDiag(diagnoseNotes(nReco));
           setNetITC(buildNetITCSummary(reco, nReco));
@@ -576,9 +581,14 @@ const Tool = () => {
                           <select className="w-full p-1.5 border border-input rounded text-xs bg-background"
                             value={(cdnrScan && !cdnrWB ? cdnrScan.sheetName : '') || ''}
                             onChange={e => {
-                              if (!e.target.value) { setCdnrScan(cdnrWB ? scanGSTR2B(cdnrWB) : null); return; }
-                              try { setCdnrScan(scanGSTR2B(gstrWB, e.target.value)); }
-                              catch (err: any) { setError(err.message); }
+                              try {
+                                const s = !e.target.value
+                                  ? (cdnrWB ? scanGSTR2B(cdnrWB) : null)
+                                  : scanGSTR2B(gstrWB, e.target.value);
+                                setCdnrScan(s);
+                                setCdnrDetected(s ? { ...s.detected } : {});
+                                setCdnrNoteTypeCol(s?.noteTypeCol || '');
+                              } catch (err: any) { setError(err.message); }
                             }}>
                             <option value="">{cdnrWB ? `Uploaded file (${cdnrName})` : 'None'}</option>
                             {names.map(n => <option key={n} value={n}>{label(n)}</option>)}
@@ -645,6 +655,70 @@ const Tool = () => {
                   })()}
                 </div>
               )}
+
+              {/* GSTR-2B B2B-CDNR (debit / credit note) Column Mapping UI */}
+              {mode === 'full' && cdnrScan && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-bold text-primary bg-secondary p-2 rounded mb-2">
+                    🧾 GSTR-2B Debit / Credit Notes ({cdnrScan.sheetName || cdnrName}) — Column Mapping
+                  </h3>
+                  {cdnrScan.headerFallback && (
+                    <div className="alert-box alert-warn mb-3 text-xs">
+                      <strong>⚠ Note sheet header detected via fuzzy matching.</strong> Please review the mappings below.
+                    </div>
+                  )}
+                  <table className="map-table">
+                    <thead><tr><th>Expected Column</th><th>Mapped To</th><th>Status</th></tr></thead>
+                    <tbody>
+                      {GSTR_STD_COLS.map((expected, ei) => {
+                        const REQUIRED = new Set(['GSTIN of supplier', 'Invoice number', 'Taxable Value (₹)']);
+                        const isRequired = REQUIRED.has(expected);
+                        const mapped = cdnrDetected[expected] || '';
+                        const labelTxt = expected === 'Invoice number' ? 'Note number' : expected === 'Invoice Date' ? 'Note date' : expected === 'Invoice Value(₹)' ? 'Note value' : expected;
+                        return (
+                          <tr key={ei}>
+                            <td className="text-xs font-medium">{labelTxt} {isRequired && <span className="text-destructive">*</span>}</td>
+                            <td>
+                              <select className="w-full p-1 border border-input rounded text-xs bg-background"
+                                value={mapped}
+                                onChange={(e) => setCdnrDetected(prev => ({ ...prev, [expected]: e.target.value || null }))}>
+                                <option value="">(Not mapped)</option>
+                                {cdnrScan.allHeaders.map((h: string, i: number) => <option key={i} value={h}>{h}</option>)}
+                              </select>
+                            </td>
+                            <td>
+                              {mapped ? <span className="text-xs text-success font-semibold">✓ Mapped</span>
+                                : isRequired ? <span className="text-xs text-destructive font-semibold">✗ Required</span>
+                                : <span className="text-xs text-warning font-semibold">⚠ Optional</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      <tr>
+                        <td className="text-xs font-medium">Note type (C / D)</td>
+                        <td>
+                          <select className="w-full p-1 border border-input rounded text-xs bg-background"
+                            value={cdnrNoteTypeCol}
+                            onChange={(e) => setCdnrNoteTypeCol(e.target.value)}>
+                            <option value="">(None — infer from sign)</option>
+                            {cdnrScan.allHeaders.map((h: string, i: number) => <option key={i} value={h}>{h}</option>)}
+                          </select>
+                        </td>
+                        <td>{cdnrNoteTypeCol
+                          ? <span className="text-xs text-success font-semibold">✓ Mapped</span>
+                          : <span className="text-xs text-warning font-semibold">⚠ Inferred</span>}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  {cdnrScan.sanityWarnings.length > 0 && (
+                    <ul className="list-disc pl-5 mt-2 text-xs space-y-1 text-warning">
+                      {cdnrScan.sanityWarnings.map((w: string, i: number) => <li key={i}>{w}</li>)}
+                    </ul>
+                  )}
+                </div>
+              )}
+
+
 
               {/* Sanity Warnings */}
               {mode === 'full' && gstrScan && gstrScan.sanityWarnings.length > 0 && (

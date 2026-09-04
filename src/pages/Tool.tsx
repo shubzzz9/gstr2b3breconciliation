@@ -656,6 +656,70 @@ const Tool = () => {
                 </div>
               )}
 
+              {/* GSTR-2B B2B-CDNR (debit / credit note) Column Mapping UI */}
+              {mode === 'full' && cdnrScan && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-bold text-primary bg-secondary p-2 rounded mb-2">
+                    🧾 GSTR-2B Debit / Credit Notes ({cdnrScan.sheetName || cdnrName}) — Column Mapping
+                  </h3>
+                  {cdnrScan.headerFallback && (
+                    <div className="alert-box alert-warn mb-3 text-xs">
+                      <strong>⚠ Note sheet header detected via fuzzy matching.</strong> Please review the mappings below.
+                    </div>
+                  )}
+                  <table className="map-table">
+                    <thead><tr><th>Expected Column</th><th>Mapped To</th><th>Status</th></tr></thead>
+                    <tbody>
+                      {GSTR_STD_COLS.map((expected, ei) => {
+                        const REQUIRED = new Set(['GSTIN of supplier', 'Invoice number', 'Taxable Value (₹)']);
+                        const isRequired = REQUIRED.has(expected);
+                        const mapped = cdnrDetected[expected] || '';
+                        const labelTxt = expected === 'Invoice number' ? 'Note number' : expected === 'Invoice Date' ? 'Note date' : expected === 'Invoice Value(₹)' ? 'Note value' : expected;
+                        return (
+                          <tr key={ei}>
+                            <td className="text-xs font-medium">{labelTxt} {isRequired && <span className="text-destructive">*</span>}</td>
+                            <td>
+                              <select className="w-full p-1 border border-input rounded text-xs bg-background"
+                                value={mapped}
+                                onChange={(e) => setCdnrDetected(prev => ({ ...prev, [expected]: e.target.value || null }))}>
+                                <option value="">(Not mapped)</option>
+                                {cdnrScan.allHeaders.map((h: string, i: number) => <option key={i} value={h}>{h}</option>)}
+                              </select>
+                            </td>
+                            <td>
+                              {mapped ? <span className="text-xs text-success font-semibold">✓ Mapped</span>
+                                : isRequired ? <span className="text-xs text-destructive font-semibold">✗ Required</span>
+                                : <span className="text-xs text-warning font-semibold">⚠ Optional</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      <tr>
+                        <td className="text-xs font-medium">Note type (C / D)</td>
+                        <td>
+                          <select className="w-full p-1 border border-input rounded text-xs bg-background"
+                            value={cdnrNoteTypeCol}
+                            onChange={(e) => setCdnrNoteTypeCol(e.target.value)}>
+                            <option value="">(None — infer from sign)</option>
+                            {cdnrScan.allHeaders.map((h: string, i: number) => <option key={i} value={h}>{h}</option>)}
+                          </select>
+                        </td>
+                        <td>{cdnrNoteTypeCol
+                          ? <span className="text-xs text-success font-semibold">✓ Mapped</span>
+                          : <span className="text-xs text-warning font-semibold">⚠ Inferred</span>}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  {cdnrScan.sanityWarnings.length > 0 && (
+                    <ul className="list-disc pl-5 mt-2 text-xs space-y-1 text-warning">
+                      {cdnrScan.sanityWarnings.map((w: string, i: number) => <li key={i}>{w}</li>)}
+                    </ul>
+                  )}
+                </div>
+              )}
+
+
+
               {/* Sanity Warnings */}
               {mode === 'full' && gstrScan && gstrScan.sanityWarnings.length > 0 && (
                 <div className="alert-box alert-warn mb-4">

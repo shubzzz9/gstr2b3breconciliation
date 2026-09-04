@@ -581,9 +581,14 @@ const Tool = () => {
                           <select className="w-full p-1.5 border border-input rounded text-xs bg-background"
                             value={(cdnrScan && !cdnrWB ? cdnrScan.sheetName : '') || ''}
                             onChange={e => {
-                              if (!e.target.value) { setCdnrScan(cdnrWB ? scanGSTR2B(cdnrWB) : null); return; }
-                              try { setCdnrScan(scanGSTR2B(gstrWB, e.target.value)); }
-                              catch (err: any) { setError(err.message); }
+                              try {
+                                const s = !e.target.value
+                                  ? (cdnrWB ? scanGSTR2B(cdnrWB) : null)
+                                  : scanGSTR2B(gstrWB, e.target.value);
+                                setCdnrScan(s);
+                                setCdnrDetected(s ? { ...s.detected } : {});
+                                setCdnrNoteTypeCol(s?.noteTypeCol || '');
+                              } catch (err: any) { setError(err.message); }
                             }}>
                             <option value="">{cdnrWB ? `Uploaded file (${cdnrName})` : 'None'}</option>
                             {names.map(n => <option key={n} value={n}>{label(n)}</option>)}

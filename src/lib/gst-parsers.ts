@@ -312,7 +312,7 @@ export function scanGSTR2B(wb: any, sheetName?: string): GSTRScanResult {
   });
 
   const usedHdrs = new Set(Object.values(det).filter(Boolean));
-  const extraCols = hdrs.filter((h: string) => !usedHdrs.has(h)).map((h: string) => ({
+  const extraCols = hdrs.filter((h: string) => !usedHdrs.has(h) && !/^Column [A-Z]+( \(\d+\))?$/.test(h)).map((h: string) => ({
     gstrCol: h, tallyCol: '', include: false,
   }));
 

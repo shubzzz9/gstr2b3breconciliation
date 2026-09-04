@@ -306,12 +306,13 @@ const Tool = () => {
         if (wantNotes) {
           setProgressLabel('Reconciling debit / credit notes...');
           setProgress(92);
-          cdnrRows = cdnrScan ? parseGSTR2BNotes(cdnrScan) : [];
-          if (cdnrScan) {
-            const s = parseGSTR2BWithStats(cdnrScan);
+          const editedCdnr = cdnrScan ? { ...cdnrScan, detected: { ...cdnrScan.detected, ...cdnrDetected } } : null;
+          cdnrRows = editedCdnr ? parseGSTR2BNotes(editedCdnr, cdnrNoteTypeCol || null) : [];
+          if (editedCdnr) {
+            const s = parseGSTR2BWithStats(editedCdnr);
             cdnrStats = { rowsRead: s.rowsRead, blankRows: s.blankRows };
           }
-          nReco = reconcileNotes(cdnrRows, ourNoteRows, cdnrScan?.extraCols || []);
+          nReco = reconcileNotes(cdnrRows, ourNoteRows, editedCdnr?.extraCols || []);
           setNoteRows(nReco);
           setNoteDiag(diagnoseNotes(nReco));
           setNetITC(buildNetITCSummary(reco, nReco));

@@ -64,6 +64,8 @@ const Tool = () => {
   const [cdnrWB, setCdnrWB] = useState<any>(null);
   const [cdnrName, setCdnrName] = useState('');
   const [cdnrScan, setCdnrScan] = useState<any>(null);
+  const [cdnrDetected, setCdnrDetected] = useState<Record<string, string | null>>({});
+  const [cdnrNoteTypeCol, setCdnrNoteTypeCol] = useState<string>('');
   const [sheetMap, setSheetMap] = useState<any>(null);
   const [noteRows, setNoteRows] = useState<any>(null);
   const [noteDiag, setNoteDiag] = useState<any>(null);

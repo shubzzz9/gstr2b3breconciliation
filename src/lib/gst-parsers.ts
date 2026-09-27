@@ -212,106 +212,156 @@ export function scanGSTR2B(wb: any, sheetName?: string): GSTRScanResult {
   const sName = sheetName && wb.Sheets[sheetName] ? sheetName : wb.SheetNames[0];
   const ws = wb.Sheets[sName];
   const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true }) as any[][];
-  let hdr1 = -1;
-  let headerFallback = false;
-
-  const SCAN_DEPTH = Math.min(30, raw.length);
-  for (let i = 0; i < SCAN_DEPTH; i++) {
-    if (raw[i] && raw[i].some((c: any) => c && String(c).toLowerCase().includes('gstin of supplier'))) { hdr1 = i; break; }
-  }
-  if (hdr1 === -1) {
-    // Scored fuzzy detection — pick the row with the most header-like keywords
-    const KW = ['gstin', 'gstn', 'gst no', 'gst number', 'invoice', 'bill no', 'doc no', 'document no',
-      'document number', 'note no', 'note number', 'taxable', 'tax amount', 'supplier', 'party',
-      'trade', 'particulars', 'igst', 'cgst', 'sgst', 'cess', 'date', 'value'];
-    let bestIdx = -1, bestHits = 0;
-    for (let i = 0; i < SCAN_DEPTH; i++) {
-      if (!raw[i]) continue;
-      const rowStr = raw[i].map((c: any) => String(c || '').toLowerCase()).join('|');
-      const hits = KW.filter(kw => rowStr.includes(kw)).length;
-      if (hits > bestHits) { bestHits = hits; bestIdx = i; }
-    }
-    if (bestIdx >= 0 && bestHits >= 2) { hdr1 = bestIdx; headerFallback = true; }
-  }
-
-  if (hdr1 === -1) {
-    for (let i = 0; i < SCAN_DEPTH; i++) {
-      if (raw[i] && raw[i].some((c: any) => c && (String(c).toLowerCase().includes('gstin') || String(c).toLowerCase().includes('gstn')))) {
-        hdr1 = i; headerFallback = true; break;
-      }
-    }
-  }
-
-  if (hdr1 === -1) throw new Error('Could not find header row in GSTR-2B file. Expected "GSTIN of supplier" column.');
-
-  const r1 = raw[hdr1], r2 = raw[hdr1 + 1] || [];
   const GSTIN_RE = /^\d{2}[A-Z0-9]{13}$/;
-  const r2FirstVal = String((r2 as any[]).find((c: any) => c != null && String(c).trim() !== '') || '').trim();
-  const r1IsStandaloneHeader = GSTIN_RE.test(r2FirstVal);
-  const dataStartIdx = hdr1 + (r1IsStandaloneHeader ? 1 : 2);
+  const isBlank = (c: any) => c === null || c === undefined || String(c).trim() === '';
+  const cellStr = (c: any) => String(c ?? '').trim();
+  const isNumLike = (c: any) => typeof c === 'number' || (typeof c === 'string' && /^-?[\d,]+(\.\d+)?$/.test(c.trim()));
+  const HDR_KW = ['gstin', 'gstn', 'gst no', 'gst number', 'invoice', 'bill', 'doc no', 'document', 'note',
+    'taxable', 'tax', 'supplier', 'party', 'trade', 'legal', 'name', 'particulars', 'igst', 'cgst', 'sgst',
+    'integrated', 'central', 'state', 'cess', 'date', 'value', 'place', 'reverse', 'type', 'number', 'amount', 'rate'];
+  const hdrScore = (row: any[] | undefined) => {
+    if (!row) return 0;
+    let s = 0;
+    row.forEach(c => {
+      if (isBlank(c) || isNumLike(c) || GSTIN_RE.test(cellStr(c).toUpperCase())) return;
+      const t = cellStr(c).toLowerCase();
+      if (HDR_KW.some(k => t.includes(k))) s++;
+    });
+    return s;
+  };
+  const isDataRow = (row: any[] | undefined) => !!row && row.some(c => GSTIN_RE.test(cellStr(c).toUpperCase())) && row.some(c => typeof c === 'number' || isNumLike(c));
 
-  // Build one header per column index — never drop blanks (that shifts columns).
-  // Merged parent headers are forward-filled; blank columns get an Excel-letter placeholder;
-  // duplicate names are made unique so value lookup by name stays correct.
+  // 1) Data-driven: first row that contains a real GSTIN + a number is where data begins.
+  const SCAN_DEPTH = Math.min(60, raw.length);
+  let dataStartIdx = -1;
+  for (let i = 0; i < SCAN_DEPTH; i++) if (isDataRow(raw[i])) { dataStartIdx = i; break; }
+
+  // 2) Header block = contiguous header-like rows directly above data (handles 1, 2, 3+ row headers).
+  let hdrRows: number[] = [];
+  let headerFallback = false;
+  if (dataStartIdx > 0) {
+    for (let i = dataStartIdx - 1; i >= 0 && hdrRows.length < 4; i--) {
+      const r = raw[i];
+      const filled = r ? r.filter(c => !isBlank(c)).length : 0;
+      if (filled === 0) { if (hdrRows.length) break; else continue; }
+      // A lone title cell ("Goods and Services Tax - GSTR 2B") ends the header block
+      if (filled === 1 && hdrRows.length && hdrScore(r) === 0) break;
+      if (hdrScore(r) === 0 && hdrRows.length) break;
+      hdrRows.unshift(i);
+    }
+    if (!hdrRows.some(i => (raw[i] || []).some(c => cellStr(c).toLowerCase().includes('gstin of supplier')))) headerFallback = true;
+  }
+  // 3) No GSTIN in data (custom/blank) → pick best-scoring keyword row(s)
+  if (!hdrRows.length) {
+    headerFallback = true;
+    let best = -1, bestS = 0;
+    for (let i = 0; i < SCAN_DEPTH; i++) { const s = hdrScore(raw[i]); if (s > bestS) { bestS = s; best = i; } }
+    if (best < 0 || bestS < 2) throw new Error('Could not find a header row in the GSTR-2B sheet. Make sure it has columns like GSTIN, Invoice number and Taxable value.');
+    hdrRows = [best];
+    if (hdrScore(raw[best + 1]) >= 2 && !isDataRow(raw[best + 1])) hdrRows.push(best + 1);
+    dataStartIdx = hdrRows[hdrRows.length - 1] + 1;
+  }
+  const hdr1 = hdrRows[0];
+
+  // Build one header per column index by stacking all header rows.
+  // Merged parent cells are forward-filled across blanks (only within the upper rows).
   const colLetter = (i: number) => {
     let s = '', n = i;
     do { s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26) - 1; } while (n >= 0);
     return s;
   };
-  const width = Math.max(r1.length, r2.length, ...raw.slice(dataStartIdx, dataStartIdx + 20).map(r => (r ? r.length : 0)));
-  let parent = '';
+  const width = Math.max(...hdrRows.map(i => (raw[i] || []).length), ...raw.slice(dataStartIdx, dataStartIdx + 30).map(r => (r ? r.length : 0)));
+  const layers: string[][] = hdrRows.map((ri, li) => {
+    const r = raw[ri] || [];
+    const isLast = li === hdrRows.length - 1;
+    let carry = '';
+    const out: string[] = [];
+    for (let c = 0; c < width; c++) {
+      const v = cellStr(r[c]);
+      if (v && v.toLowerCase() !== 'null') carry = v;
+      // forward-fill only parents that have children underneath
+      const below = hdrRows.slice(li + 1).some(rj => !isBlank((raw[rj] || [])[c]));
+      out.push(v && v.toLowerCase() !== 'null' ? v : (!isLast && below ? carry : ''));
+    }
+    return out;
+  });
   const seen: Record<string, number> = {};
   const hdrs: string[] = [];
-  for (let i = 0; i < width; i++) {
-    const top = String(r1[i] ?? '').trim();
-    if (top) parent = top;
-    const sub = r1IsStandaloneHeader ? '' : String(r2[i] ?? '').trim();
-    let name = sub && sub !== 'null' ? sub : top;
-    if (!name) name = r1IsStandaloneHeader ? '' : (parent ? '' : '');
-    if (!name) name = `Column ${colLetter(i)}`;
-    if (seen[name]) { seen[name]++; name = `${name} (${seen[name]})`; }
-    else seen[name] = 1;
+  const hdrFull: string[] = []; // parent + child text used for matching
+  for (let c = 0; c < width; c++) {
+    const parts: string[] = [];
+    layers.forEach(l => { const v = l[c]; if (v && parts[parts.length - 1] !== v) parts.push(v); });
+    let name = parts[parts.length - 1] || `Column ${colLetter(c)}`;
+    hdrFull.push(parts.join(' ').toLowerCase());
+    if (seen[name]) { seen[name]++; name = `${name} (${seen[name]})`; } else seen[name] = 1;
     hdrs.push(name);
   }
 
-
-  const GSTR_FUZZY_KW: Record<string, string[]> = {
-    'GSTIN of supplier': ['gstin of supplier', 'gstin of supp', 'gstin', 'gst no', 'gst num'],
-    'Trade/Legal name': ['trade', 'legal name', 'supplier name', 'party name', 'particulars'],
-    'Invoice number': ['invoice no', 'invoice num', 'bill no', 'bill num', 'note number', 'note no'],
-    'Invoice type': ['invoice type', 'inv type', 'note supply type'],
-    'Invoice Date': ['invoice date', 'bill date', 'inv date', 'note date'],
-    'Invoice Value(₹)': ['invoice value', 'inv value', 'bill value', 'inv val', 'note value'],
-    'Place of supply': ['place of supply', 'place of supp'],
-    'Supply Attract Reverse Charge': ['reverse charge', 'rev charge'],
-    'Taxable Value (₹)': ['taxable value', 'taxable amt', 'taxable amount'],
-    'Integrated Tax(₹)': ['integrated tax', 'igst'],
-    'Central Tax(₹)': ['central tax', 'cgst'],
-    'State/UT Tax(₹)': ['state/ut', 'sgst', 'ut tax'],
-    'Cess(₹)': ['cess'],
-  };
-
-
-  const STD_COLS = [
-    'GSTIN of supplier', 'Trade/Legal name', 'Invoice number', 'Invoice type',
-    'Invoice Date', 'Invoice Value(₹)', 'Place of supply',
-    'Supply Attract Reverse Charge', 'Taxable Value (₹)',
-    'Integrated Tax(₹)', 'Central Tax(₹)', 'State/UT Tax(₹)', 'Cess(₹)',
-  ];
-
-  const det: Record<string, string | null> = {};
-  STD_COLS.forEach(expected => {
-    let found = hdrs.find((h: string) => h === expected);
-    if (!found) found = hdrs.find((h: string) => cleanString(h) === cleanString(expected));
-    if (!found) found = hdrs.find((h: string) => h.toLowerCase().includes(expected.toLowerCase().slice(0, 8)));
-    if (!found) {
-      const kws = GSTR_FUZZY_KW[expected] || [];
-      found = hdrs.find((h: string) => kws.some(kw => h.toLowerCase().includes(kw)));
-    }
-    det[expected] = found || null;
+  // Column profiles from data (content-based signals)
+  const sample = raw.slice(dataStartIdx, dataStartIdx + 40).filter(r => r && !r.every(isBlank));
+  const prof = Array.from({ length: width }, (_, c) => {
+    const vals = sample.map(r => r[c]).filter(v => !isBlank(v));
+    const n = vals.length || 1;
+    const strs = vals.map(v => cellStr(v).toUpperCase());
+    return {
+      filled: vals.length,
+      gstin: strs.filter(s => GSTIN_RE.test(s)).length / n,
+      num: vals.filter(v => isNumLike(v)).length / n,
+      date: vals.filter(v => v instanceof Date || (typeof v === 'number' && v > 30000 && v < 60000 && Number.isInteger(v)) || /^\d{1,4}[\/.-]\d{1,2}[\/.-]\d{1,4}$/.test(cellStr(v))).length / n,
+      cd: strs.filter(s => /^(C|D|CREDIT( NOTE)?|DEBIT( NOTE)?)$/.test(s)).length / n,
+      yn: strs.filter(s => /^(Y|N|YES|NO)$/.test(s)).length / n,
+      alnum: strs.filter(s => /[A-Z]/.test(s) && /\d/.test(s) && !GSTIN_RE.test(s)).length / n,
+      text: strs.filter(s => /[A-Z]{3,}/.test(s) && !/\d{4,}/.test(s)).length / n,
+      state: strs.filter(s => /^\d{2}-/.test(s) || /^[A-Z ]+$/.test(s)).length / n,
+    };
   });
 
-  const usedHdrs = new Set(Object.values(det).filter(Boolean));
+  type Spec = { kw: string[]; neg?: string[]; fit: (p: typeof prof[number]) => number };
+  const SPECS: Record<string, Spec> = {
+    'GSTIN of supplier': { kw: ['gstin of supplier', 'supplier gstin', 'gstin', 'gstn', 'gst no', 'gst number', 'gst in'], neg: ['recipient', 'ecommerce', 'e-commerce'], fit: p => p.gstin * 3 },
+    'Trade/Legal name': { kw: ['trade/legal', 'trade name', 'legal name', 'supplier name', 'party name', 'name of supplier', 'party', 'particulars', 'supplier', 'name'], neg: ['gstin'], fit: p => p.text * 1.5 - p.num },
+    'Invoice number': { kw: ['invoice number', 'invoice no', 'inv no', 'note number', 'note no', 'bill no', 'document number', 'doc no', 'voucher no', 'invoice', 'note', 'number'], neg: ['date', 'value', 'type', 'gstin'], fit: p => (p.alnum + p.num * 0.5) - p.date * 2 - p.gstin * 3 },
+    'Invoice type': { kw: ['invoice type', 'inv type', 'note supply type', 'supply type', 'document type'], neg: ['note type'], fit: p => p.text * 0.5 - p.num },
+    'Invoice Date': { kw: ['invoice date', 'note date', 'bill date', 'document date', 'doc date', 'inv date', 'date'], neg: ['filing', 'period', 'gstr'], fit: p => p.date * 2.5 },
+    'Invoice Value(₹)': { kw: ['invoice value', 'note value', 'bill value', 'document value', 'total value', 'inv value'], neg: ['taxable'], fit: p => p.num },
+    'Place of supply': { kw: ['place of supply', 'pos', 'place'], fit: p => p.state * 0.5 - p.num * 0.5 },
+    'Supply Attract Reverse Charge': { kw: ['reverse charge', 'rcm', 'rev charge'], fit: p => p.yn * 2 },
+    'Taxable Value (₹)': { kw: ['taxable value', 'taxable amount', 'taxable amt', 'taxable', 'assessable'], fit: p => p.num },
+    'Integrated Tax(₹)': { kw: ['integrated tax', 'igst'], neg: ['rate'], fit: p => p.num },
+    'Central Tax(₹)': { kw: ['central tax', 'cgst'], neg: ['rate'], fit: p => p.num },
+    'State/UT Tax(₹)': { kw: ['state/ut tax', 'state/ut', 'state tax', 'ut tax', 'sgst', 'utgst'], neg: ['rate', 'place'], fit: p => p.num },
+    'Cess(₹)': { kw: ['cess'], neg: ['rate'], fit: p => p.num },
+  };
+
+  // Score every (field, column) pair; assign greedily by best score so no column is used twice.
+  const pairs: { f: string; c: number; s: number }[] = [];
+  Object.entries(SPECS).forEach(([f, sp]) => {
+    for (let c = 0; c < width; c++) {
+      const h = hdrFull[c];
+      const leaf = hdrs[c].toLowerCase();
+      let s = 0;
+      if (hdrs[c] === f || cleanString(hdrs[c]) === cleanString(f)) s += 20;
+      const ki = sp.kw.findIndex(k => h.includes(k));
+      if (ki >= 0) s += 10 - Math.min(ki, 8) + (leaf.includes(sp.kw[ki]) ? 2 : 0);
+      if (sp.neg && sp.neg.some(k => leaf.includes(k))) s -= 8;
+      if (prof[c].filled) s += sp.fit(prof[c]) * 2;
+      if (s >= 4) pairs.push({ f, c, s });
+    }
+  });
+  pairs.sort((a, b) => b.s - a.s);
+  const det: Record<string, string | null> = {};
+  const taken = new Set<number>();
+  pairs.forEach(({ f, c }) => {
+    if (det[f] !== undefined || taken.has(c)) return;
+    det[f] = hdrs[c]; taken.add(c);
+  });
+  Object.keys(SPECS).forEach(f => { if (det[f] === undefined) det[f] = null; });
+
+  // Note type (C/D) — by header, else by content
+  let noteTypeIdx = hdrs.findIndex((h, c) => /note\s*type|document\s*type|type of note/i.test(hdrFull[c]) && !taken.has(c));
+  if (noteTypeIdx < 0) noteTypeIdx = prof.findIndex((p, c) => p.filled > 0 && p.cd >= 0.8 && !taken.has(c));
+
+  const usedHdrs = new Set<string>([...Object.values(det).filter(Boolean) as string[], ...(noteTypeIdx >= 0 ? [hdrs[noteTypeIdx]] : [])]);
   const extraCols = hdrs.filter((h: string) => !usedHdrs.has(h) && !/^Column [A-Z]+( \(\d+\))?$/.test(h)).map((h: string) => ({
     gstrCol: h, tallyCol: '', include: false,
   }));
@@ -376,7 +426,7 @@ export function scanGSTR2B(wb: any, sheetName?: string): GSTRScanResult {
     }
   }
 
-  const noteTypeCol = hdrs.find((h: string) => /note\s*type/i.test(h)) || null;
+  const noteTypeCol = noteTypeIdx >= 0 ? hdrs[noteTypeIdx] : null;
 
   return { hdrIdx: hdr1, raw, allHeaders: hdrs, detected: det, extraCols, sanityWarnings, dataStartIdx, headerFallback, noteTypeCol, sheetName: sName };
 

@@ -361,7 +361,7 @@ export function scanGSTR2B(wb: any, sheetName?: string): GSTRScanResult {
   let noteTypeIdx = hdrs.findIndex((h, c) => /note\s*type|document\s*type|type of note/i.test(hdrFull[c]) && !taken.has(c));
   if (noteTypeIdx < 0) noteTypeIdx = prof.findIndex((p, c) => p.filled > 0 && p.cd >= 0.8 && !taken.has(c));
 
-  const usedHdrs = new Set(Object.values(det).filter(Boolean));
+  const usedHdrs = new Set<string>([...Object.values(det).filter(Boolean) as string[], ...(noteTypeIdx >= 0 ? [hdrs[noteTypeIdx]] : [])]);
   const extraCols = hdrs.filter((h: string) => !usedHdrs.has(h) && !/^Column [A-Z]+( \(\d+\))?$/.test(h)).map((h: string) => ({
     gstrCol: h, tallyCol: '', include: false,
   }));
@@ -426,7 +426,7 @@ export function scanGSTR2B(wb: any, sheetName?: string): GSTRScanResult {
     }
   }
 
-  const noteTypeCol = hdrs.find((h: string) => /note\s*type/i.test(h)) || null;
+  const noteTypeCol = noteTypeIdx >= 0 ? hdrs[noteTypeIdx] : null;
 
   return { hdrIdx: hdr1, raw, allHeaders: hdrs, detected: det, extraCols, sanityWarnings, dataStartIdx, headerFallback, noteTypeCol, sheetName: sName };
 

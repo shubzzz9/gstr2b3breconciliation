@@ -215,7 +215,12 @@ export function scanGSTR2B(wb: any, sheetName?: string): GSTRScanResult {
   const GSTIN_RE = /^\d{2}[A-Z0-9]{13}$/;
   const isBlank = (c: any) => c === null || c === undefined || String(c).trim() === '';
   const cellStr = (c: any) => String(c ?? '').trim();
+  const compact = (c: any) => cellStr(c).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const isGstin = (c: any) => GSTIN_RE.test(compact(c));
   const isNumLike = (c: any) => typeof c === 'number' || (typeof c === 'string' && /^-?[\d,]+(\.\d+)?$/.test(c.trim()));
+  const isDateLike = (c: any) => c instanceof Date
+    || (typeof c === 'number' && c > 30000 && c < 60000 && Number.isInteger(c))
+    || /^\d{1,4}[\/.-]\d{1,2}[\/.-]\d{1,4}$/.test(cellStr(c));
   const HDR_KW = ['gstin', 'gstn', 'gst no', 'gst number', 'invoice', 'bill', 'doc no', 'document', 'note',
     'taxable', 'tax', 'supplier', 'party', 'trade', 'legal', 'name', 'particulars', 'igst', 'cgst', 'sgst',
     'integrated', 'central', 'state', 'cess', 'date', 'value', 'place', 'reverse', 'type', 'number', 'amount', 'rate'];
@@ -223,18 +228,40 @@ export function scanGSTR2B(wb: any, sheetName?: string): GSTRScanResult {
     if (!row) return 0;
     let s = 0;
     row.forEach(c => {
-      if (isBlank(c) || isNumLike(c) || GSTIN_RE.test(cellStr(c).toUpperCase())) return;
+      if (isBlank(c) || isNumLike(c) || isGstin(c)) return;
       const t = cellStr(c).toLowerCase();
       if (HDR_KW.some(k => t.includes(k))) s++;
     });
     return s;
   };
-  const isDataRow = (row: any[] | undefined) => !!row && row.some(c => GSTIN_RE.test(cellStr(c).toUpperCase())) && row.some(c => typeof c === 'number' || isNumLike(c));
+  const dataScore = (row: any[] | undefined) => {
+    if (!row) return 0;
+    const vals = row.filter(c => !isBlank(c));
+    if (!vals.length) return 0;
+    const gstins = vals.filter(isGstin).length;
+    const nums = vals.filter(isNumLike).length;
+    const dates = vals.filter(isDateLike).length;
+    const ids = vals.filter(c => {
+      const s = cellStr(c).toUpperCase();
+      return s.length >= 3 && /[A-Z]/.test(s) && /\d/.test(s) && !isGstin(c) && !isDateLike(c);
+    }).length;
+    const keywords = hdrScore(row);
+    // GSTIN is decisive. The second branch supports custom exports with no/invalid GSTIN,
+    // provided the row still looks like a transaction rather than a textual heading.
+    return gstins * 6 + Math.min(nums, 4) + Math.min(dates, 1) * 2 + Math.min(ids, 2) - keywords * 2;
+  };
+  const isDataRow = (row: any[] | undefined) => dataScore(row) >= 6;
 
-  // 1) Data-driven: first row that contains a real GSTIN + a number is where data begins.
+  // 1) Find the first transaction-like row. GSTINs with spaces/punctuation are accepted,
+  // and a run of similarly-shaped custom rows can establish data even without a valid GSTIN.
   const SCAN_DEPTH = Math.min(60, raw.length);
   let dataStartIdx = -1;
-  for (let i = 0; i < SCAN_DEPTH; i++) if (isDataRow(raw[i])) { dataStartIdx = i; break; }
+  for (let i = 0; i < SCAN_DEPTH; i++) {
+    if (isDataRow(raw[i])) { dataStartIdx = i; break; }
+    const loose = dataScore(raw[i]) >= 4;
+    const followedByData = dataScore(raw[i + 1]) >= 4 || dataScore(raw[i + 2]) >= 4;
+    if (loose && followedByData && hdrScore(raw[i]) === 0) { dataStartIdx = i; break; }
+  }
 
   // 2) Header block = contiguous header-like rows directly above data (handles 1, 2, 3+ row headers).
   let hdrRows: number[] = [];
@@ -244,9 +271,12 @@ export function scanGSTR2B(wb: any, sheetName?: string): GSTRScanResult {
       const r = raw[i];
       const filled = r ? r.filter(c => !isBlank(c)).length : 0;
       if (filled === 0) { if (hdrRows.length) break; else continue; }
+      // Never absorb a missed first transaction into a multi-row header block.
+      if (dataScore(r) >= 4) break;
       // A lone title cell ("Goods and Services Tax - GSTR 2B") ends the header block
       if (filled === 1 && hdrRows.length && hdrScore(r) === 0) break;
       if (hdrScore(r) === 0 && hdrRows.length) break;
+      if (hdrScore(r) === 0) continue;
       hdrRows.unshift(i);
     }
     if (!hdrRows.some(i => (raw[i] || []).some(c => cellStr(c).toLowerCase().includes('gstin of supplier')))) headerFallback = true;
@@ -255,7 +285,11 @@ export function scanGSTR2B(wb: any, sheetName?: string): GSTRScanResult {
   if (!hdrRows.length) {
     headerFallback = true;
     let best = -1, bestS = 0;
-    for (let i = 0; i < SCAN_DEPTH; i++) { const s = hdrScore(raw[i]); if (s > bestS) { bestS = s; best = i; } }
+    for (let i = 0; i < SCAN_DEPTH; i++) {
+      if (dataScore(raw[i]) >= 4) continue;
+      const s = hdrScore(raw[i]);
+      if (s > bestS) { bestS = s; best = i; }
+    }
     if (best < 0 || bestS < 2) throw new Error('Could not find a header row in the GSTR-2B sheet. Make sure it has columns like GSTIN, Invoice number and Taxable value.');
     hdrRows = [best];
     if (hdrScore(raw[best + 1]) >= 2 && !isDataRow(raw[best + 1])) hdrRows.push(best + 1);
@@ -305,7 +339,7 @@ export function scanGSTR2B(wb: any, sheetName?: string): GSTRScanResult {
     const strs = vals.map(v => cellStr(v).toUpperCase());
     return {
       filled: vals.length,
-      gstin: strs.filter(s => GSTIN_RE.test(s)).length / n,
+      gstin: vals.filter(isGstin).length / n,
       num: vals.filter(v => isNumLike(v)).length / n,
       date: vals.filter(v => v instanceof Date || (typeof v === 'number' && v > 30000 && v < 60000 && Number.isInteger(v)) || /^\d{1,4}[\/.-]\d{1,2}[\/.-]\d{1,4}$/.test(cellStr(v))).length / n,
       cd: strs.filter(s => /^(C|D|CREDIT( NOTE)?|DEBIT( NOTE)?)$/.test(s)).length / n,

@@ -40,14 +40,14 @@ export function scanTally(wb: any): TallyScanResult {
   // Auto-guess single columns
   const guessCol = (names: string[]): number => {
     for (const name of names) {
-      const idx = headers.findIndex((h: string) => h.toLowerCase().includes(name.toLowerCase()));
+      const idx = headers.findIndex((h: string) => hdrKey(h).includes(hdrKey(name)));
       if (idx >= 0) return idx;
     }
     return -1;
   };
   const guessCols = (names: string[], extMatch?: (h: string) => boolean): number[] => {
     return headers.reduce((a: number[], h: string, i: number) => {
-      const byKw = names.some(n => h.toLowerCase().includes(n.toLowerCase()));
+      const byKw = names.some(n => hdrKey(h).includes(hdrKey(n)));
       const byExt = extMatch ? extMatch(h) : false;
       if (byKw || byExt) a.push(i);
       return a;

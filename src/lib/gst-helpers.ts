@@ -13,9 +13,9 @@ export const GSTR_STD_COLS = [
 export const TALLY_SINGLE_ROWS = [
   { id: 'gstin', label: 'GSTIN Column', required: true, guess: ['gstin', 'gst no', 'gst num', 'gst number'] },
   { id: 'trade', label: 'Supplier / Party Name', required: true, guess: ['particulars', 'party name', 'supplier', 'trade'] },
-  { id: 'invoice', label: 'Invoice / Bill Number', required: true, guess: ['supplierinvoice', 'supplier invoice', 'invoice no', 'bill no', 'bill.no'] },
-  { id: 'voucher', label: 'Voucher Number (optional)', required: false, guess: ['voucher no', 'voucher number', 'vou no', 'vou.no'] },
-  { id: 'date', label: 'Date Column', required: true, guess: ['date', 'bill date', 'invoice date'] },
+  { id: 'invoice', label: 'Invoice / Bill Number', required: true, guess: ['supplierinvoice', 'supplier invoice', 'invoice no', 'bill no', 'bill.no', 'ref.no', 'ref no', 'reference no'] },
+  { id: 'voucher', label: 'Voucher Number (optional)', required: false, guess: ['voucher no', 'voucher number', 'vou no', 'vou.no', 'entry no'] },
+  { id: 'date', label: 'Date Column', required: true, guess: ['bill date', 'invoice date', 'supplier invoice date', 'ref. date', 'ref date', 'date'] },
 ];
 
 // Used only by Option 2 (purchase file vs GSTR-2B) to spot debit / credit notes
@@ -35,6 +35,8 @@ export type DocType = 'invoice' | 'credit_note' | 'debit_note';
 export function classifyDocTypeFromText(v: any): DocType | null {
   const s = String(v || '').toLowerCase().trim();
   if (!s) return null;
+  if (/^(dn|d\.n\.?|dr)\b/.test(s)) return 'debit_note';
+  if (/^(cn|c\.n\.?|cr)\b/.test(s)) return 'credit_note';
   if (DEBIT_NOTE_KW.some(k => s.includes(k))) return 'debit_note';
   if (CREDIT_NOTE_KW.some(k => s.includes(k))) return 'credit_note';
   return null;
@@ -76,6 +78,21 @@ export const AUDIT_FIELDS = [
   { label: 'IGST 5%', prKey: 'igst5', tallyKey: '_igst5' },
   { label: 'IGST 12%', prKey: 'igst12', tallyKey: '_igst12' },
 ];
+
+/** Header comparison key: lower-case with spaces, dots, dashes etc removed ("I GST" == "igst"). */
+export function hdrKey(s: any): string {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9%@]/g, '');
+}
+
+/** Token-overlap similarity of two supplier names (0..1). */
+export function nameSimilarity(a: any, b: any): number {
+  const STOP = new Set(['PVT', 'PRIVATE', 'LTD', 'LIMITED', 'LLP', 'THE', 'AND', 'CO', 'M', 'S', 'MS', 'INDIA', 'ENTERPRISES', 'ENTERPRISE', 'TRADERS', 'INDUSTRIES']);
+  const tok = (x: any) => String(x || '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter(t => t.length > 1 && !STOP.has(t));
+  const ta = new Set(tok(a)), tb = new Set(tok(b));
+  if (!ta.size || !tb.size) return 0;
+  let common = 0; ta.forEach(t => { if (tb.has(t)) common++; });
+  return common / Math.min(ta.size, tb.size);
+}
 
 export function cleanString(s: any): string {
   return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');

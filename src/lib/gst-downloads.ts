@@ -175,7 +175,7 @@ export function downloadFile1(tallyData: any[]) {
 // FILE 2: RECONCILIATION OUTPUT + REMARKS GUIDE
 // ═══════════════════════════════════════════════════════════
 
-export function downloadFile2(recoRows: any[], extraCols: any[] = [], noteRows: any[] = [], netITC: any[] = [], rowAudit: any[] = []) {
+export function downloadFile2(recoRows: any[], extraCols: any[] = [], noteRows: any[] = [], netITC: any[] = [], rowAudit: any[] = [], gstr3b: any[] = []) {
   if (!recoRows) return;
   const cols = [...GSTR_STD_COLS, ...extraCols.filter(e => e.include).map(e => e.gstrCol), 'DATA', 'Remarks'];
   const ws = makeStyledSheet(recoRows, cols);
@@ -196,6 +196,12 @@ export function downloadFile2(recoRows: any[], extraCols: any[] = [], noteRows: 
     XLSX.utils.book_append_sheet(wb, wsNet, 'Net ITC Summary');
   }
 
+  if (gstr3b && gstr3b.length) {
+    const ws3b = makeStyledSheet(gstr3b, Object.keys(gstr3b[0]));
+    ws3b['!cols'] = [{ wch: 14 }, { wch: 60 }, { wch: 11 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 15 }, { wch: 60 }];
+    XLSX.utils.book_append_sheet(wb, ws3b, 'GSTR-3B Summary');
+  }
+
   if (rowAudit && rowAudit.length) {
     const auditCols = ['Section', 'Item', 'Count', 'Details'];
     const wsAudit = makeStyledSheet(rowAudit, auditCols);
@@ -203,9 +209,6 @@ export function downloadFile2(recoRows: any[], extraCols: any[] = [], noteRows: 
     wsAudit['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
     XLSX.utils.book_append_sheet(wb, wsAudit, 'Row Audit');
   }
-
-
-
 
   // Remarks Legend sheet
   const legendRows = [
@@ -215,7 +218,8 @@ export function downloadFile2(recoRows: any[], extraCols: any[] = [], noteRows: 
     { 'Remark': 'Not in our data — GSTIN Mismatch', 'What it means': 'Invoice exists in both GSTR-2B and accounts but appears as unmatched because the GSTIN is recorded differently in each.', 'Action Required': 'Correct the GSTIN in your accounts/Tally to match what is in GSTR-2B.', 'See in Mismatch File': 'Sheet: GSTIN Mismatches' },
     { 'Remark': 'Not in GSTR 2B', 'What it means': 'This invoice is in your accounts but NOT in GSTR-2B. The supplier may not have filed GSTR-1 yet, so ITC may not be claimable.', 'Action Required': 'Follow up with supplier to file GSTR-1. Do not claim ITC for this invoice until it appears in GSTR-2B.', 'See in Mismatch File': 'Sheet: Not In GSTR 2B (ITC Risk)' },
     { 'Remark': 'Not in GSTR 2B — GSTIN Mismatch', 'What it means': 'Invoice appears unmatched because GSTIN differs between accounts and GSTR-2B.', 'Action Required': 'Correct GSTIN in accounts to match GSTR-2B.', 'See in Mismatch File': 'Sheet: GSTIN Mismatches' },
-    { 'Remark': 'Possible Match — Invoice No. differs', 'What it means': 'Invoice numbers are different in GSTR-2B and accounts, but all other details (GSTIN, amounts) are similar. Likely the same bill recorded differently.', 'Action Required': 'Verify with the supplier. If same bill, correct the invoice number in accounts to match GSTR-2B.', 'See in Mismatch File': 'Sheet: Possible Matches' },
+    { 'Remark': 'Matched – Bill No differs', 'What it means': 'Same supplier GSTIN and same amounts, but the bill number is written differently (typo, prefix, "/25-26").', 'Action Required': 'Treated as matched. Correct the bill number in accounts to match GSTR-2B.', 'See in Mismatch File': 'Sheet: Possible Matches' },
+    { 'Remark': 'Matched – GSTIN differs', 'What it means': 'Same bill number and same amounts, but the GSTIN differs or is blank in one file.', 'Action Required': 'Treated as matched. Correct the supplier GSTIN in accounts.', 'See in Mismatch File': 'Sheet: GSTIN Mismatches' },
   ];
   const legendCols = ['Remark', 'What it means', 'Action Required', 'See in Mismatch File'];
   const wsLegend = makeStyledSheet(legendRows, legendCols);

@@ -150,7 +150,18 @@ export function processTally(m: TallyMapping) {
     }
     grouped[key]._srcRows.push(excelRow);
 
-    m.taxable.forEach(c => { grouped[key].taxable += numVal(r[c]); });
+    // Split-rate bills: registers often repeat the full bill taxable on every rate line.
+    // Same bill + same voucher + identical taxable → count the taxable once (tax still summed).
+    const rowTaxableVal = Math.round(m.taxable.reduce((s, c) => s + numVal(r[c]), 0) * 100) / 100;
+    const seenKey = `${voucher}|${rowTaxableVal}`;
+    const g = grouped[key];
+    if (!g._seenTaxable) g._seenTaxable = new Set<string>();
+    if (rowTaxableVal !== 0 && g._seenTaxable.has(seenKey)) {
+      g._dupTaxableRows = (g._dupTaxableRows || 0) + 1;
+    } else {
+      g._seenTaxable.add(seenKey);
+      m.taxable.forEach(c => { g.taxable += numVal(r[c]); });
+    }
     m.igst.forEach(c => { grouped[key].igst += numVal(r[c]); });
     m.cgst.forEach(c => { grouped[key].cgst += numVal(r[c]); });
     m.sgst.forEach(c => { grouped[key].sgst += numVal(r[c]); });
@@ -182,7 +193,14 @@ export function processTally(m: TallyMapping) {
     mergedSamples: mergedGroups.slice(0, 20).map(r => ({
       gstin: r.gstin, invoiceNum: r.invoiceNum, rows: r._srcRows.join(', '), count: r._srcRows.length,
     })),
+    splitRateBills: rows.filter(r => r._dupTaxableRows).map(r => ({
+      gstin: r.gstin, invoiceNum: r.invoiceNum, rows: r._srcRows.join(', '), taxable: r.taxable,
+    })),
+    totals: ['taxable', 'igst', 'cgst', 'sgst', 'cess'].reduce((o: any, k) => {
+      o[k] = Math.round(rows.reduce((s, r) => s + numVal(r[k]), 0) * 100) / 100; return o;
+    }, {}),
   };
+  rows.forEach(r => { delete r._seenTaxable; delete r._dupTaxableRows; });
   return { rows, blankGstinRows, blankInvoiceRows, audit };
 }
 

@@ -777,6 +777,9 @@ export function buildRowAudit(input: RowAuditInput) {
   add(PR, 'Rows skipped — no supplier / party name', (a.noSupplierRows || []).length,
     (a.noSupplierRows || []).slice(0, 25).map((r: any) => `row ${r.row}${r.invoiceNum ? ` (${r.invoiceNum})` : ''}`).join(', '));
   add(PR, 'Rows actually used', a.rowsUsed ?? 0, 'Every one of these rows is included in the output figures');
+  if (a.totals) add(PR, 'Column totals (tie these to Tally)', '', `Taxable ${a.totals.taxable} | IGST ${a.totals.igst} | CGST ${a.totals.cgst} | SGST ${a.totals.sgst} | Cess ${a.totals.cess}`);
+  add(PR, 'Split-rate bills — repeated taxable counted once', (a.splitRateBills || []).length,
+    (a.splitRateBills || []).slice(0, 25).map((r: any) => `${r.invoiceNum} (rows ${r.rows})`).join(', '));
   add(PR, 'Rows merged into a single invoice / note', a.mergedRows ?? 0,
     `${a.mergedGroups ?? 0} documents had more than one line (multi-rate bills) and were summed`);
   add(PR, 'Invoice groups after merging', a.invoiceGroups ?? 0, '');

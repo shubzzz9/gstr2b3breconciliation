@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   cleanString, normalise, numVal, safeVal, safeNum,
-  excelSerialToDate, invSimilarity, GSTR_STD_COLS, AUDIT_FIELDS
+  excelSerialToDate, invSimilarity, GSTR_STD_COLS, AUDIT_FIELDS, nameSimilarity
 } from './gst-helpers';
 
 // ═══════════════════════════════════════════════════════════
@@ -9,13 +9,12 @@ import {
 // ═══════════════════════════════════════════════════════════
 
 function findPossibleMatches(outputRows: any[]) {
-  function withinPct(a: any, b: any, pct: number) {
-    const av = numVal(a), bv = numVal(b);
-    if (av === 0 && bv === 0) return true;
-    if (av === 0 || bv === 0) return Math.abs(av - bv) <= 1;
-    return Math.abs(av - bv) / Math.max(Math.abs(av), Math.abs(bv)) * 100 <= pct;
-  }
+  // Pass 2: same GSTIN + same amounts (within Rs. 5), bill number written differently
   const TOL = 5;
+  const near = (a: any, b: any, t = TOL) => Math.abs(numVal(a) - numVal(b)) <= t;
+  const amtsMatch = (g: any, o: any, t = TOL) =>
+    near(g['Taxable Value (₹)'], o['Taxable Value (₹)'], t) && near(g['Integrated Tax(₹)'], o['Integrated Tax(₹)'], t) &&
+    near(g['Central Tax(₹)'], o['Central Tax(₹)'], t) && near(g['State/UT Tax(₹)'], o['State/UT Tax(₹)'], t);
   const gstrUnmatched = outputRows.filter(r => r['DATA'] === 'GSTR 2B' && r['Remarks'] === 'Not in our data');
   const ourUnmatched = outputRows.filter(r => r['DATA'] === 'Our Data' && r['Remarks'] === 'Not in GSTR 2B');
   const usedOur = new Set<number>();
@@ -28,12 +27,10 @@ function findPossibleMatches(outputRows: any[]) {
     ourUnmatched.forEach((oRow, oi) => {
       if (usedOur.has(oi)) return;
       if (cleanString(oRow['GSTIN of supplier'] || '') !== gstin) return;
-      if (!withinPct(gRow['Taxable Value (₹)'], oRow['Taxable Value (₹)'], TOL)) return;
-      if (!withinPct(gRow['Integrated Tax(₹)'], oRow['Integrated Tax(₹)'], TOL)) return;
-      if (!withinPct(gRow['Central Tax(₹)'], oRow['Central Tax(₹)'], TOL)) return;
-      if (!withinPct(gRow['State/UT Tax(₹)'], oRow['State/UT Tax(₹)'], TOL)) return;
-      const sim = invSimilarity(gRow['Invoice number'], oRow['Invoice number']);
-      if (sim.score >= 60 && sim.score > bestScore) {
+      if (!amtsMatch(gRow, oRow)) return;
+      let sim = invSimilarity(gRow['Invoice number'], oRow['Invoice number']);
+      if (sim.score < 60 && amtsMatch(gRow, oRow, 1)) sim = { score: 50, reason: 'Same GSTIN and same amount — bill no. written differently' };
+      if (sim.score >= 50 && sim.score > bestScore) {
         bestScore = sim.score;
         bestMatch = { oi, oRow, sim };
       }
@@ -44,6 +41,38 @@ function findPossibleMatches(outputRows: any[]) {
     }
   });
   return pairs;
+}
+
+/** Pass 3: same bill number + same amounts, but GSTIN differs or is blank on one side. */
+function findGSTINPairs(outputRows: any[]) {
+  const near = (a: any, b: any) => Math.abs(numVal(a) - numVal(b)) <= 5;
+  const gstrUn = outputRows.filter(r => r['DATA'] === 'GSTR 2B' && String(r['Remarks']).startsWith('Not in our data') || (r['DATA'] === 'GSTR 2B' && r['Remarks'] === 'GSTIN not mentioned in GSTR 2B'));
+  const ourUn = outputRows.filter(r => r['DATA'] === 'Our Data' && (r['Remarks'] === 'Not in GSTR 2B' || r['Remarks'] === 'GSTIN not mentioned in Our data'));
+  const used = new Set<any>();
+  const pairs: any[] = [];
+  gstrUn.forEach(g => {
+    const inv = cleanString(g['Invoice number'] || '');
+    if (!inv) return;
+    const o = ourUn.find(x => !used.has(x) && cleanString(x['Invoice number'] || '') === inv
+      && cleanString(x['GSTIN of supplier'] || '') !== cleanString(g['GSTIN of supplier'] || '')
+      && near(g['Taxable Value (₹)'], x['Taxable Value (₹)'])
+      && near(numVal(g['Integrated Tax(₹)']) + numVal(g['Central Tax(₹)']) + numVal(g['State/UT Tax(₹)']),
+              numVal(x['Integrated Tax(₹)']) + numVal(x['Central Tax(₹)']) + numVal(x['State/UT Tax(₹)'])));
+    if (o) { used.add(o); pairs.push({ gRow: g, oRow: o }); }
+  });
+  return pairs;
+}
+
+/** GSTIN difference wording — "typo" only when 1–2 chars differ AND supplier names are similar. */
+export function gstinDiffReason(g1: string, g2: string, name1: any, name2: any): string {
+  const a = cleanString(g1), b = cleanString(g2);
+  if (!a || !b) return 'GSTIN blank on one side — enter the supplier GSTIN in accounts';
+  const diff = a.split('').filter((c, i) => c !== (b[i] || '')).length + Math.abs(a.length - b.length);
+  const sim = nameSimilarity(name1, name2);
+  if (diff <= 2 && (sim >= 0.5 || !String(name1 || '').trim() || !String(name2 || '').trim()))
+    return `Likely GSTIN typo in accounts — ${diff} character(s) differ, supplier names similar`;
+  if (a.slice(2, 12) === b.slice(2, 12)) return 'Same PAN, different GSTIN — supplier filed under another state/branch registration';
+  return `Different supplier GSTIN (${diff} chars differ) — verify which supplier this bill belongs to`;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -136,28 +165,36 @@ export function reconcile(gstrRows: any[], ourRows: any[], extraCols: any[] = []
     });
   });
 
-  // Possible match detection
+  // Pass 2 — same GSTIN + amount, bill number differs
   const possibleMatchPairs = findPossibleMatches(output);
-  if (possibleMatchPairs.length > 0) {
-    const pairedGSTR = new Set(possibleMatchPairs.map((p: any) => p.gRow));
-    const pairedOur = new Set(possibleMatchPairs.map((p: any) => p.oRow));
-    possibleMatchPairs.forEach((p: any) => {
-      p.gRow['Remarks'] = 'Possible Match — Invoice No. differs';
-      p.oRow['Remarks'] = 'Possible Match — Invoice No. differs';
-    });
-    const nonPaired = output.filter(r => !pairedGSTR.has(r) && !pairedOur.has(r));
-    const pairedSection: any[] = [];
-    possibleMatchPairs.forEach((p: any) => { pairedSection.push(p.gRow); pairedSection.push(p.oRow); });
+  possibleMatchPairs.forEach((p: any) => {
+    p.gRow['Remarks'] = BILL_NO_DIFFERS;
+    p.oRow['Remarks'] = BILL_NO_DIFFERS;
+  });
+  // Pass 3 — same bill number + amount, GSTIN differs / blank
+  const gstinPairs = findGSTINPairs(output);
+  gstinPairs.forEach((p: any) => {
+    p.gRow['Remarks'] = GSTIN_DIFFERS;
+    p.oRow['Remarks'] = GSTIN_DIFFERS;
+  });
+  const allPairs = [...possibleMatchPairs, ...gstinPairs];
+  if (allPairs.length > 0) {
+    const paired = new Set<any>();
+    allPairs.forEach((p: any) => { paired.add(p.gRow); paired.add(p.oRow); });
+    const nonPaired = output.filter(r => !paired.has(r));
     output.length = 0;
     nonPaired.forEach(r => output.push(r));
-    pairedSection.forEach(r => output.push(r));
+    allPairs.forEach((p: any) => { output.push(p.gRow); output.push(p.oRow); });
   }
 
-  // Store possibleMatchPairs on the output array for use by diagnosis/downloads
   (output as any)._possibleMatchPairs = possibleMatchPairs;
+  (output as any)._gstinPairs = gstinPairs;
 
   return output;
 }
+
+export const BILL_NO_DIFFERS = 'Matched – Bill No differs';
+export const GSTIN_DIFFERS = 'Matched – GSTIN differs';
 
 // ═══════════════════════════════════════════════════════════
 // MISMATCH DIAGNOSIS — exact port from original buildDiagnosis

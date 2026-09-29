@@ -231,14 +231,7 @@ export function diagnoseMismatches(gstrRows: any[], ourRows: any[], recoOutput: 
         tallyGSTIN = normalise(String(tallyMatches[0].gstin || ''));
         if (tGSTIN && tGSTIN !== gstin) {
           isGSTINIssue = true;
-          const diffChars = gstin.split('').filter((c: string, i: number) => c !== (tGSTIN[i] || '')).length
-                           + Math.abs(gstin.length - tGSTIN.length);
-          if (gstin.length !== tGSTIN.length)
-            reason = `GSTIN length mismatch — GSTR-2B has ${gstin.length} chars, Tally has ${tGSTIN.length} chars (missing/extra digit)`;
-          else if (diffChars === 1)
-            reason = '1-character GSTIN typo — likely zero vs letter O, or single digit error';
-          else
-            reason = `GSTIN mismatch — ${diffChars} characters differ (wrong GSTIN entered in Tally)`;
+          reason = gstinDiffReason(gstin, tGSTIN, row['Trade/Legal name'], tallyMatches[0].tradeName);
           suggestion = `Correct Tally GSTIN to: ${row['GSTIN of supplier']}`;
         }
       }
@@ -284,14 +277,7 @@ export function diagnoseMismatches(gstrRows: any[], ourRows: any[], recoOutput: 
         gstrGSTIN = String(gstrMatches[0]['GSTIN of supplier'] || '');
         if (gG && gG !== gstin) {
           isGSTINIssue = true;
-          const diffChars = gstin.split('').filter((c: string, i: number) => c !== (gG[i] || '')).length
-                           + Math.abs(gstin.length - gG.length);
-          if (gstin.length !== gG.length)
-            reason = `GSTIN length mismatch — Tally has ${gstin.length} chars, GSTR-2B has ${gG.length} chars`;
-          else if (diffChars === 1)
-            reason = '1-character GSTIN typo in Tally — check for zero vs letter O';
-          else
-            reason = `GSTIN mismatch — ${diffChars} chars differ (wrong GSTIN in Tally)`;
+          reason = gstinDiffReason(gG, gstin, gstrMatches[0]['Trade/Legal name'], row['Trade/Legal name']);
           suggestion = `Correct Tally GSTIN to: ${gstrGSTIN}`;
         }
       }
@@ -384,7 +370,91 @@ export function diagnoseMismatches(gstrRows: any[], ourRows: any[], recoOutput: 
   figNotMatched.sort((a: any, b: any) => a._sp - b._sp);
   figNotMatched.forEach((r: any) => { delete r._sp; });
 
+  // Pass-3 pairs (same bill + amount, GSTIN differs) — list for correction
+  ((recoOutput as any)._gstinPairs || []).forEach((p: any) => {
+    gstinMismatches.push({
+      'Source': 'Matched – GSTIN differs',
+      'GSTIN (GSTR-2B)': p.gRow['GSTIN of supplier'] || '',
+      'GSTIN (Tally)': p.oRow['GSTIN of supplier'] || '',
+      'Supplier': p.gRow['Trade/Legal name'] || p.oRow['Trade/Legal name'] || '',
+      'Invoice Number': p.gRow['Invoice number'] || '',
+      'Invoice Date': p.gRow['Invoice Date'] || '',
+      'Taxable Value': p.gRow['Taxable Value (₹)'],
+      'IGST': p.gRow['Integrated Tax(₹)'],
+      'CGST': p.gRow['Central Tax(₹)'],
+      'SGST': p.gRow['State/UT Tax(₹)'],
+      'Diagnosis': gstinDiffReason(p.gRow['GSTIN of supplier'], p.oRow['GSTIN of supplier'], p.gRow['Trade/Legal name'], p.oRow['Trade/Legal name']),
+      'Correct the Tally/Accounts GSTIN to': p.gRow['GSTIN of supplier'] || '',
+    });
+  });
+
   return { notInOurData, notInGSTR2B, gstinMismatches, figNotMatched };
+}
+
+// ═══════════════════════════════════════════════════════════
+// GSTR-3B SUMMARY (Option 2) — built from the same final result
+// ═══════════════════════════════════════════════════════════
+
+function parseDMY(s: any): Date | null {
+  const m = String(s || '').match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  return m ? new Date(Date.UTC(+m[3], +m[2] - 1, +m[1])) : null;
+}
+
+/** Sec 16(4): ITC deadline = 30 Nov after the end of the invoice's financial year (warning only). */
+export function sec164Deadline(d: Date): Date {
+  const fyEnd = d.getUTCMonth() >= 3 ? d.getUTCFullYear() + 1 : d.getUTCFullYear();
+  return new Date(Date.UTC(fyEnd, 10, 30));
+}
+
+export function buildGSTR3BSummary(recoRows: any[], noteRows: any[] = [], today = new Date()) {
+  const itc = (r: any) => ({ i: numVal(r['Integrated Tax(₹)']), c: numVal(r['Central Tax(₹)']), s: numVal(r['State/UT Tax(₹)']), ce: numVal(r['Cess(₹)']) });
+  const blank = () => ({ i: 0, c: 0, s: 0, ce: 0, n: 0 });
+  const add = (acc: any, r: any, sign = 1) => { const t = itc(r); acc.i += sign * t.i; acc.c += sign * t.c; acc.s += sign * t.s; acc.ce += sign * t.ce; acc.n++; };
+  const all2B = blank(), notAvail = blank(), notes2B = blank(), onlyBooks = blank(), late = blank();
+  const lateList: any[] = [];
+  const availKey = (r: any) => Object.keys(r).find(k => /itc\s*availab/i.test(k));
+
+  (recoRows || []).forEach(r => {
+    if (r['DATA'] === 'GSTR 2B') {
+      add(all2B, r);
+      const ak = availKey(r);
+      if (ak && /^n/i.test(String(r[ak] || '').trim())) add(notAvail, r);
+      const d = parseDMY(r['Invoice Date']);
+      if (d) {
+        const dl = sec164Deadline(d);
+        const days = Math.round((dl.getTime() - today.getTime()) / 86400000);
+        if (days < 30) {
+          add(late, r);
+          lateList.push({ inv: r['Invoice number'], sup: r['Trade/Legal name'], date: r['Invoice Date'], deadline: dl.toISOString().slice(0, 10), past: days < 0 });
+        }
+      }
+    } else if (r['DATA'] === 'Our Data' && String(r['Remarks'] || '').startsWith('Not in GSTR 2B')) add(onlyBooks, r);
+  });
+  (noteRows || []).forEach(r => { if (r['DATA'] === 'GSTR 2B') add(notes2B, r, -1); });
+  // portal note values are already negative after sign normalisation; make sure they reduce
+  ['i', 'c', 's', 'ce'].forEach(k => { (notes2B as any)[k] = -Math.abs((notes2B as any)[k]); });
+
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const row = (table: string, desc: string, a: any, note = '') => ({
+    'GSTR-3B Table': table, 'Description': desc, 'Documents': a.n,
+    'Integrated Tax': r2(a.i), 'Central Tax': r2(a.c), 'State/UT Tax': r2(a.s), 'Cess': r2(a.ce),
+    'Total ITC': r2(a.i + a.c + a.s + a.ce), 'Note': note,
+  });
+  const net = { i: all2B.i + notes2B.i - notAvail.i, c: all2B.c + notes2B.c - notAvail.c, s: all2B.s + notes2B.s - notAvail.s, ce: all2B.ce + notes2B.ce - notAvail.ce, n: all2B.n + notes2B.n };
+  const rows = [
+    row('4A(5)', 'All other ITC — B2B invoices as per GSTR-2B', all2B, 'Supplier-filed invoices reflected in GSTR-2B'),
+    row('4A(5) less', 'Credit notes as per GSTR-2B (B2B-CDNR)', notes2B, 'Reduces ITC (shown net in 4A(5) on the portal)'),
+    row('4B(2)', 'ITC not available as per GSTR-2B (ITC Availability = No)', notAvail, 'Reverse / do not claim; reclaim when eligible'),
+    row('4D(2)', 'Ineligible — Sec 16(4) deadline passed or near (warning)', late, 'Check invoices listed below before claiming'),
+    row('4C', 'Net ITC available (4A − 4B)', net, 'Before blocked credits under Sec 17(5) — review manually'),
+    row('Info', 'In books but not in GSTR-2B — do not claim this month', onlyBooks, 'Carry forward until supplier files GSTR-1'),
+  ];
+  lateList.slice(0, 200).forEach(l => rows.push({
+    'GSTR-3B Table': 'Sec 16(4)', 'Description': `${l.sup || ''} — ${l.inv || ''} (${l.date})`, 'Documents': 1,
+    'Integrated Tax': '' as any, 'Central Tax': '' as any, 'State/UT Tax': '' as any, 'Cess': '' as any, 'Total ITC': '' as any,
+    'Note': `${l.past ? 'Deadline PASSED' : 'Deadline near'}: ${l.deadline} (or annual return date, whichever earlier)`,
+  }));
+  return rows;
 }
 
 // ═══════════════════════════════════════════════════════════

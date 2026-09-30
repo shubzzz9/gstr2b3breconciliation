@@ -1,7 +1,7 @@
 import { it, expect } from 'vitest';
 import XLSX from 'xlsx-js-style';
 import fs from 'fs';
-import { scanTally, processTally, scanGSTR2B, parseGSTR2BWithStats } from '@/lib/gst-parsers';
+import { scanTally, processTally, scanGSTR2B, parseGSTR2BWithStats, classifyGSTR2BSheets } from '@/lib/gst-parsers';
 import { reconcile, buildGSTR3BSummary } from '@/lib/gst-reconcile';
 const P = '/mnt/user-uploads/';
 it.skipIf(!fs.existsSync(P + 'Total_ITC_March.xlsx'))('march', () => {
@@ -10,7 +10,7 @@ it.skipIf(!fs.existsSync(P + 'Total_ITC_March.xlsx'))('march', () => {
   const m: any = { hdrIdx: ts.hdrIdx, headers: ts.headers, raw: ts.raw, ...ts.singleGuesses, ...ts.multiGuesses };
   const t: any = processTally(m);
   const gwb = XLSX.read(fs.readFileSync(P + 'GSTR2B-TaxPower_122347.xlsx'));
-  const gs: any = (scanGSTR2B as any)(gwb);
+  const gs: any = (scanGSTR2B as any)(gwb, classifyGSTR2BSheets(gwb).b2bSheet || undefined);
   const g = parseGSTR2BWithStats(gs).rows;
   const reco = reconcile(g, t.rows, gs.extraCols);
   const c: any = {}; reco.forEach((r: any) => { const k = r.Remarks || r['Remarks']; c[k] = (c[k] || 0) + 1; });

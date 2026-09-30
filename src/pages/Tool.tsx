@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import XLSX from 'xlsx-js-style';
 import { scanTally, processTally, scanGSTR2B, parseGSTR2B, parseGSTR2BWithStats, sheetRowCounts, parseCombined, parsePurchaseRegister, parseTally4, reParseCombined, reParsePR, reParseTally4, classifyGSTR2BSheets, parseGSTR2BNotes } from '@/lib/gst-parsers';
-import { reconcile, diagnoseMismatches, reconcilePRTally, reconcileNotes, diagnoseNotes, buildNetITCSummary, buildRowAudit } from '@/lib/gst-reconcile';
+import { reconcile, diagnoseMismatches, reconcilePRTally, reconcileNotes, diagnoseNotes, buildNetITCSummary, buildRowAudit, buildGSTR3BSummary } from '@/lib/gst-reconcile';
 import { downloadFile1, downloadFile2, downloadFile3, downloadPRTallyAudit } from '@/lib/gst-downloads';
 import { TALLY_SINGLE_ROWS, TALLY_MULTI_ROWS, TALLY_NOTE_ROW, GSTR_STD_COLS } from '@/lib/gst-helpers';
 import { generateFingerprint } from '@/lib/fingerprint';
@@ -70,6 +70,7 @@ const Tool = () => {
   const [noteRows, setNoteRows] = useState<any>(null);
   const [noteDiag, setNoteDiag] = useState<any>(null);
   const [netITC, setNetITC] = useState<any>(null);
+  const [gstr3b, setGstr3b] = useState<any[]>([]);
   const [rowAudit, setRowAudit] = useState<any[] | null>(null);
   const [showAudit, setShowAudit] = useState(false);
 
@@ -281,6 +282,11 @@ const Tool = () => {
       const allRows = tResult.rows as any[];
       const invoiceRows = wantNotes ? allRows.filter(r => (r.docType || 'invoice') === 'invoice') : allRows;
       const ourNoteRows = wantNotes ? allRows.filter(r => (r.docType || 'invoice') !== 'invoice') : [];
+      const tt: any = (tResult as any).audit?.totals;
+      if (mode === 'full' && tt && Math.abs(tt.taxable) > 0 && Math.abs(tt.igst) + Math.abs(tt.cgst) + Math.abs(tt.sgst) === 0) {
+        setError(`Your purchase file has taxable value of Rs. ${tt.taxable.toLocaleString('en-IN')} but IGST, CGST and SGST all add up to zero. Please pick the correct tax columns in the mapping below and try again.`);
+        setStep(2); return;
+      }
       setTallyData(invoiceRows);
       setTallyResult(tResult);
 
@@ -319,6 +325,7 @@ const Tool = () => {
         } else {
           setNoteRows(null); setNoteDiag(null); setNetITC(null);
         }
+        try { setGstr3b(buildGSTR3BSummary(reco, nReco)); } catch { setGstr3b([]); }
 
         setRowAudit(buildRowAudit({
           tallyAudit: tResult.audit,
@@ -984,7 +991,7 @@ const Tool = () => {
                       {netITC && netITC.length > 0 && <div>• Net ITC Summary — <strong>{netITC.length}</strong> suppliers</div>}
                       {rowAudit && rowAudit.length > 0 && <div>• Row Audit — <strong>{rowAudit.length}</strong> rows</div>}
                     </div>
-                    <button onClick={() => handleDownload('file2', () => downloadFile2(recoRows, gstrScan?.extraCols, noteRows || [], netITC || [], rowAudit || []))} className="btn-tool bg-success text-success-foreground hover:opacity-90">💾 Download</button>
+                    <button onClick={() => handleDownload('file2', () => downloadFile2(recoRows, gstrScan?.extraCols, noteRows || [], netITC || [], rowAudit || [], gstr3b || []))} className="btn-tool bg-success text-success-foreground hover:opacity-90">💾 Download</button>
                   </div>
                 )}
                 {(mode === 'full' || mode === 'combined') && diagData && (

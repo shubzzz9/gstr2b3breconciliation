@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import XLSX from 'xlsx-js-style';
 import { scanTally, processTally, scanGSTR2B, parseGSTR2B, parseGSTR2BWithStats, sheetRowCounts, parseCombined, parsePurchaseRegister, parseTally4, reParseCombined, reParsePR, reParseTally4, classifyGSTR2BSheets, parseGSTR2BNotes } from '@/lib/gst-parsers';
-import { reconcile, diagnoseMismatches, reconcilePRTally, reconcileNotes, diagnoseNotes, buildNetITCSummary, buildRowAudit, buildGSTR3BSummary } from '@/lib/gst-reconcile';
+import { reconcile, diagnoseMismatches, reconcilePRTally, reconcileNotes, diagnoseNotes, buildNetITCSummary, buildRowAudit, buildGSTR3BSummary, repairBlankGSTIN } from '@/lib/gst-reconcile';
 import { downloadFile1, downloadFile2, downloadFile3, downloadPRTallyAudit } from '@/lib/gst-downloads';
 import { TALLY_SINGLE_ROWS, TALLY_MULTI_ROWS, TALLY_NOTE_ROW, GSTR_STD_COLS } from '@/lib/gst-helpers';
 import { generateFingerprint } from '@/lib/fingerprint';
@@ -299,6 +299,7 @@ const Tool = () => {
         const gstrRows = gstrStats.rows;
         setProgressLabel('Reconciling...');
         setProgress(70);
+        repairBlankGSTIN(gstrRows, invoiceRows);
         const reco = reconcile(gstrRows, invoiceRows, editedScan.extraCols);
         setRecoRows(reco);
         setProgress(85);
@@ -318,6 +319,7 @@ const Tool = () => {
             const s = parseGSTR2BWithStats(editedCdnr);
             cdnrStats = { rowsRead: s.rowsRead, blankRows: s.blankRows };
           }
+          repairBlankGSTIN(cdnrRows, ourNoteRows);
           nReco = reconcileNotes(cdnrRows, ourNoteRows, editedCdnr?.extraCols || []);
           setNoteRows(nReco);
           setNoteDiag(diagnoseNotes(nReco));

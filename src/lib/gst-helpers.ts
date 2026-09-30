@@ -84,6 +84,11 @@ export function hdrKey(s: any): string {
   return String(s || '').toLowerCase().replace(/[^a-z0-9%@]/g, '');
 }
 
+/** Valid 15-character GSTIN format (2-digit state + PAN + entity + Z/char + checksum). */
+export function isValidGSTIN(v: any): boolean {
+  return /^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z0-9]{3}$/.test(String(v || '').toUpperCase().replace(/\s/g, ''));
+}
+
 /** Token-overlap similarity of two supplier names (0..1). */
 export function nameSimilarity(a: any, b: any): number {
   const STOP = new Set(['PVT', 'PRIVATE', 'LTD', 'LIMITED', 'LLP', 'THE', 'AND', 'CO', 'M', 'S', 'MS', 'INDIA', 'ENTERPRISES', 'ENTERPRISE', 'TRADERS', 'INDUSTRIES']);

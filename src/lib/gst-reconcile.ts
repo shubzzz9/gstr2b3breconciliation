@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   cleanString, normalise, numVal, safeVal, safeNum,
-  excelSerialToDate, invSimilarity, GSTR_STD_COLS, AUDIT_FIELDS, nameSimilarity
+  excelSerialToDate, invSimilarity, GSTR_STD_COLS, AUDIT_FIELDS, nameSimilarity, isValidGSTIN
 } from './gst-helpers';
 
 // ═══════════════════════════════════════════════════════════
@@ -114,7 +114,7 @@ export function reconcile(gstrRows: any[], ourRows: any[], extraCols: any[] = []
   const ourDict: Record<string, { gi: number; row: any }[]> = {};
   ourRows.forEach((row: any, gi: number) => {
     const g = cleanString(normalise(String(row.gstin || '')));
-    const inv = row.invoiceNum === '(blank)' ? '' : (row.invoiceNum || '');
+    const inv = row._matchInv || (row.invoiceNum === '(blank)' ? '' : (row.invoiceNum || ''));
     const key = g + '|' + cleanString(inv);
     if (!ourDict[key]) ourDict[key] = [];
     ourDict[key].push({ gi, row });
@@ -142,6 +142,8 @@ export function reconcile(gstrRows: any[], ourRows: any[], extraCols: any[] = []
       const fig = Math.abs(gT - sT) <= TAX_TOL && Math.abs(gI - sI) <= TAX_TOL &&
                   Math.abs(gC - sC) <= TAX_TOL && Math.abs(gS - sS) <= TAX_TOL && Math.abs(gCe - sCe) <= TAX_TOL;
       remark = fig ? (cands.length === 1 ? 'Matched' : `Matched - Multi-line (${cands.length} entries)`) : 'Fig Not Matched';
+      const rep = cands.find(e => e.row._gstinRepaired);
+      if (fig && rep) remark = repairedRemark(gstin);
       output.push(buildGSTRRow(gRow, remark, extraCols));
       cands.forEach(e => { used.add(e.gi); output.push(buildOurRow(e.row, fig ? remark : 'Fig Not Matched', extraCols)); });
     } else {
@@ -194,6 +196,42 @@ export function reconcile(gstrRows: any[], ourRows: any[], extraCols: any[] = []
 }
 
 export const BILL_NO_DIFFERS = 'Matched – Bill No differs';
+export const GSTIN_REPAIRED_PREFIX = 'Matched — GSTIN missing/invalid in your books';
+const repairedRemark = (g: string) => `${GSTIN_REPAIRED_PREFIX}, use ${g}`;
+const AMT_TOL = 1.5;
+
+/**
+ * Blank / malformed GSTIN repair. For each books row whose GSTIN is blank or not a valid
+ * 15-char GSTIN, look for exactly one 2B row with a similar supplier name (>= 85%) and the
+ * same taxable + total tax (within Rs 1.50). On a unique hit the row borrows the 2B GSTIN
+ * (and bill no. for keying) so the normal exact pass pairs them. Amounts compared on
+ * absolute value so it also works for notes. Mutates ourRows; returns the repairs made.
+ */
+export function repairBlankGSTIN(gstrRows: any[], ourRows: any[]) {
+  const repairs: any[] = [];
+  const claimed = new Set<any>();
+  const tax = (i: any, c: any, s: any) => Math.abs(numVal(i)) + Math.abs(numVal(c)) + Math.abs(numVal(s));
+  const validKeys = new Set(ourRows.filter(r => isValidGSTIN(r.gstin)).map(r => cleanString(r.gstin) + '|' + cleanString(r.invoiceNum)));
+  ourRows.forEach(r => {
+    if (isValidGSTIN(r.gstin)) return;
+    const rT = Math.abs(numVal(r.taxable)), rX = tax(r.igst, r.cgst, r.sgst);
+    const cands = gstrRows.filter(g => !claimed.has(g)
+      && isValidGSTIN(g['GSTIN of supplier'])
+      && !validKeys.has(cleanString(g['GSTIN of supplier']) + '|' + cleanString(g['Invoice number']))
+      && nameSimilarity(g['Trade/Legal name'], r.tradeName) >= 0.85
+      && Math.abs(Math.abs(numVal(g['Taxable Value (₹)'])) - rT) <= AMT_TOL
+      && Math.abs(tax(g['Integrated Tax(₹)'], g['Central Tax(₹)'], g['State/UT Tax(₹)']) - rX) <= AMT_TOL);
+    if (cands.length !== 1) return;
+    const g = cands[0];
+    claimed.add(g);
+    repairs.push({ supplier: r.tradeName, invoice: r.invoiceNum, oldGstin: r.gstin || '(blank)', newGstin: g['GSTIN of supplier'] });
+    r._origGstin = r.gstin || '';
+    r.gstin = String(g['GSTIN of supplier']);
+    r._matchInv = String(g['Invoice number'] || '');
+    r._gstinRepaired = true;
+  });
+  return repairs;
+}
 export const GSTIN_DIFFERS = 'Matched – GSTIN differs';
 
 // ═══════════════════════════════════════════════════════════
@@ -430,7 +468,11 @@ export function buildGSTR3BSummary(recoRows: any[], noteRows: any[] = [], today 
       }
     } else if (r['DATA'] === 'Our Data' && String(r['Remarks'] || '').startsWith('Not in GSTR 2B')) add(onlyBooks, r);
   });
-  (noteRows || []).forEach(r => { if (r['DATA'] === 'GSTR 2B') add(notes2B, r, -1); });
+  const booksNotesOnly = blank();
+  (noteRows || []).forEach(r => {
+    if (r['DATA'] === 'GSTR 2B') add(notes2B, r, -1);
+    else if (r['DATA'] === 'Our Data' && String(r['Remarks'] || '') === 'Not in GSTR 2B') add(booksNotesOnly, r);
+  });
   // portal note values are already negative after sign normalisation; make sure they reduce
   ['i', 'c', 's', 'ce'].forEach(k => { (notes2B as any)[k] = -Math.abs((notes2B as any)[k]); });
 
@@ -449,6 +491,7 @@ export function buildGSTR3BSummary(recoRows: any[], noteRows: any[] = [], today 
     row('4C', 'Net ITC available (4A − 4B)', net, 'Before blocked credits under Sec 17(5) — review manually'),
     row('Info', 'In books but not in GSTR-2B — do not claim this month', onlyBooks, 'Carry forward until supplier files GSTR-1'),
   ];
+  if (booksNotesOnly.n) rows.push(row('Info (notes)', 'Debit notes in books with no matching credit note in GSTR-2B (after number, amount and grouped matching)', booksNotesOnly, 'Follow up with supplier to file the credit note'));
   lateList.slice(0, 200).forEach(l => rows.push({
     'GSTR-3B Table': 'Sec 16(4)', 'Description': `${l.sup || ''} — ${l.inv || ''} (${l.date})`, 'Documents': 1,
     'Integrated Tax': '' as any, 'Central Tax': '' as any, 'State/UT Tax': '' as any, 'Cess': '' as any, 'Total ITC': '' as any,
@@ -639,6 +682,61 @@ export function reconcileNotes(cdnrRows: any[], ourNoteRows: any[], extraCols: a
   });
   (output as any)._possibleNotePairs = pairs;
 
+  // Pass 2 — one-to-one by GSTIN + total tax (Rs 1.50) + date within 60 days.
+  // The portal CDNR sheet carries only the supplier's own note number (no original invoice),
+  // while books carry our debit-note / original bill number, so amount is the reliable key.
+  const taxOf = (r: any) => Math.abs(numVal(r['Integrated Tax(₹)'])) + Math.abs(numVal(r['Central Tax(₹)'])) + Math.abs(numVal(r['State/UT Tax(₹)'])) + Math.abs(numVal(r['Cess(₹)']));
+  const dayOf = (v: any) => {
+    if (typeof v === 'number') return v;
+    const m = String(v || '').match(/(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
+    return m ? Date.UTC(+m[3], +m[2] - 1, +m[1]) / 86400000 : NaN;
+  };
+  const toDay = (v: any) => { const n = dayOf(v); return typeof v === 'number' ? (v - 25569) : n; };
+  const AMT_PASS = 'Possible Match — matched by amount, verify note number';
+  const openG = () => output.filter(r => r['DATA'] === 'GSTR 2B' && r['Remarks'] === 'Not in our data');
+  const openO = () => output.filter(r => r['DATA'] === 'Our Data' && (r['Remarks'] === 'Not in GSTR 2B'));
+  const amountPairs: any[] = [];
+  const takenO = new Set<any>();
+  openG().forEach(g => {
+    const gst = cleanString(g['GSTIN of supplier'] || ''); if (!gst) return;
+    const gt = taxOf(g), gd = toDay(g['Invoice Date']);
+    let best: any = null, bestGap = Infinity;
+    openO().forEach(o => {
+      if (takenO.has(o) || cleanString(o['GSTIN of supplier'] || '') !== gst) return;
+      if (Math.abs(taxOf(o) - gt) > AMT_TOL) return;
+      const od = toDay(o['Invoice Date']);
+      const gap = isNaN(gd) || isNaN(od) ? 0 : Math.abs(gd - od);
+      if (gap > 60) return;
+      if (gap < bestGap) { bestGap = gap; best = o; }
+    });
+    if (best) { takenO.add(best); amountPairs.push({ gRow: g, oRow: best }); g['Remarks'] = AMT_PASS; best['Remarks'] = AMT_PASS; }
+  });
+
+  // Pass 3 — one portal credit note covering 2–4 of our debit notes (same GSTIN, sum within Rs 1.50)
+  const groups: any[] = [];
+  openG().forEach(g => {
+    const gst = cleanString(g['GSTIN of supplier'] || ''); if (!gst) return;
+    const pool = openO().filter(o => cleanString(o['GSTIN of supplier'] || '') === gst).slice(0, 15);
+    if (pool.length < 2) return;
+    const target = taxOf(g);
+    let found: any[] | null = null;
+    const walk = (start: number, picked: any[], sum: number) => {
+      if (found) return;
+      if (picked.length >= 2 && Math.abs(sum - target) <= AMT_TOL) { found = [...picked]; return; }
+      if (picked.length === 4 || sum > target + AMT_TOL) return;
+      for (let i = start; i < pool.length && !found; i++) walk(i + 1, [...picked, pool[i]], sum + taxOf(pool[i]));
+    };
+    walk(0, [], 0);
+    if (found) {
+      const f = found as any[];
+      const rem = `Possible Match — credit note covers ${f.length} debit notes`;
+      g['Remarks'] = rem; f.forEach(o => { o['Remarks'] = rem; });
+      groups.push({ gRow: g, oRows: f });
+    }
+  });
+  (output as any)._amountNotePairs = amountPairs;
+  (output as any)._noteGroups = groups;
+
   return output;
 }
 
@@ -663,9 +761,13 @@ export function diagnoseNotes(noteOutput: any[]) {
     };
 
     if (row['DATA'] === 'GSTR 2B' && remark === 'Not in our data') {
+      const g = cleanString(String(row['GSTIN of supplier'] || ''));
+      const anyBooked = noteOutput.some((r: any) => r['DATA'] === 'Our Data' && cleanString(String(r['GSTIN of supplier'] || '')) === g);
       noteMismatches.push({
         ...base,
-        'Diagnosis': 'Credit note issued by supplier but no purchase return booked — ITC must be reduced in your books',
+        'Diagnosis': anyBooked
+          ? 'Credit note issued by supplier — no debit note of this amount found in your books; reduce ITC'
+          : 'Credit note issued by supplier — no debit note booked for this supplier at all; reduce ITC',
         'Action': 'Book the purchase return / debit note in accounts and reverse the ITC',
       });
     } else if (row['DATA'] === 'Our Data' && remark === 'Not in GSTR 2B') {

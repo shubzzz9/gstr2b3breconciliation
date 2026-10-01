@@ -544,6 +544,46 @@ export function parseGSTR2BWithStats(scan: GSTRScanResult): { rows: any[]; rowsR
 
 
 // ═══════════════════════════════════════════════════════════
+// GSTR-2B B2BA (AMENDMENTS) — revised invoices linked to originals
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Read a B2BA sheet and merge it into the B2B rows. Each amended row is keyed on the
+ * REVISED invoice number/date (what the supplier now reports) and keeps the original
+ * number on `_origInv` so reconciliation can fall back to it when books still carry the
+ * old number. A B2B row with the same GSTIN + original (or revised) number is superseded.
+ */
+export function mergeGSTR2BAmendments(wb: any, sheetName: string, b2bRows: any[]) {
+  const scan: any = scanGSTR2B(wb, sheetName);
+  const hdrs: string[] = scan.allHeaders || [];
+  const find = (re: RegExp) => hdrs.find(h => re.test(String(h).toLowerCase())) || null;
+  const origNo = find(/original.*(inv|doc|bill|note).*(no|num)/) || find(/original.*(no|num)/);
+  const origDate = find(/original.*date/);
+  const revNo = find(/revised.*(no|num)/);
+  const revDate = find(/revised.*date/);
+  if (!origNo || !revNo) return { rows: b2bRows, amended: [] as any[], superseded: [] as any[], skipped: true };
+  const extras = [...scan.extraCols.filter((e: any) => e.gstrCol !== origNo && e.gstrCol !== origDate),
+    { gstrCol: origNo, tallyCol: '', include: false }, ...(origDate ? [{ gstrCol: origDate, tallyCol: '', include: false }] : [])];
+  const rows = parseGSTR2B({ ...scan, detected: { ...scan.detected, 'Invoice number': revNo, ...(revDate ? { 'Invoice Date': revDate } : {}) }, extraCols: extras });
+  const key = (g: any, inv: any) => cleanString(g) + '|' + cleanString(inv);
+  const amended = rows.filter(r => String(r['GSTIN of supplier'] || '').trim() || String(r['Invoice number'] || '').trim()).map(r => {
+    const o = String(r[origNo] ?? '').trim();
+    const od = origDate ? excelSerialToDate(r[origDate]) : '';
+    const same = cleanString(o) === cleanString(r['Invoice number']);
+    r._origInv = o; r._origDate = od; r._amended = true;
+    r['Invoice type'] = same
+      ? `Amendment (B2BA) — values revised for ${o}${od ? ' dt ' + od : ''}`
+      : `Amendment (B2BA) — revised from ${o}${od ? ' dt ' + od : ''}`;
+    return r;
+  });
+  const drop = new Set<string>();
+  amended.forEach(a => { drop.add(key(a['GSTIN of supplier'], a._origInv)); drop.add(key(a['GSTIN of supplier'], a['Invoice number'])); });
+  const superseded = b2bRows.filter(r => drop.has(key(r['GSTIN of supplier'], r['Invoice number'])));
+  const kept = b2bRows.filter(r => !drop.has(key(r['GSTIN of supplier'], r['Invoice number'])));
+  return { rows: [...kept, ...amended], amended, superseded, skipped: false };
+}
+
+// ═══════════════════════════════════════════════════════════
 // GSTR-2B SHEET CLASSIFICATION (B2B vs B2B-CDNR) — Option 2 only
 // ═══════════════════════════════════════════════════════════
 

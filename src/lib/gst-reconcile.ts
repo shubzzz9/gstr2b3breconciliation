@@ -127,7 +127,9 @@ export function reconcile(gstrRows: any[], ourRows: any[], extraCols: any[] = []
     const gstin = String(gRow['GSTIN of supplier'] || '');
     const invoice = String(gRow['Invoice number'] || '');
     const key = cleanString(gstin) + '|' + cleanString(invoice);
-    const cands = (ourDict[key] || []).filter(e => !used.has(e.gi));
+    let cands = (ourDict[key] || []).filter(e => !used.has(e.gi));
+    // B2BA: books may still carry the ORIGINAL invoice number
+    if (!cands.length && gRow._origInv) cands = (ourDict[cleanString(gstin) + '|' + cleanString(gRow._origInv)] || []).filter(e => !used.has(e.gi));
 
     let remark: string;
     if (cands.length > 0) {

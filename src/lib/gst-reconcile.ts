@@ -697,12 +697,14 @@ export function reconcileNotes(cdnrRows: any[], ourNoteRows: any[], extraCols: a
   const openO = () => output.filter(r => r['DATA'] === 'Our Data' && (r['Remarks'] === 'Not in GSTR 2B'));
   const amountPairs: any[] = [];
   const takenO = new Set<any>();
+  const byGst = (rows: any[]) => { const m = new Map<string, any[]>(); rows.forEach(o => { const k = cleanString(o['GSTIN of supplier'] || ''); if (!m.has(k)) m.set(k, []); m.get(k)!.push(o); }); return m; };
+  const oIdx = byGst(openO());
   openG().forEach(g => {
     const gst = cleanString(g['GSTIN of supplier'] || ''); if (!gst) return;
     const gt = taxOf(g), gd = toDay(g['Invoice Date']);
     let best: any = null, bestGap = Infinity;
-    openO().forEach(o => {
-      if (takenO.has(o) || cleanString(o['GSTIN of supplier'] || '') !== gst) return;
+    (oIdx.get(gst) || []).forEach(o => {
+      if (takenO.has(o)) return;
       if (Math.abs(taxOf(o) - gt) > AMT_TOL) return;
       const od = toDay(o['Invoice Date']);
       const gap = isNaN(gd) || isNaN(od) ? 0 : Math.abs(gd - od);
@@ -714,9 +716,10 @@ export function reconcileNotes(cdnrRows: any[], ourNoteRows: any[], extraCols: a
 
   // Pass 3 — one portal credit note covering 2–4 of our debit notes (same GSTIN, sum within Rs 1.50)
   const groups: any[] = [];
+  const oIdx2 = byGst(openO());
   openG().forEach(g => {
     const gst = cleanString(g['GSTIN of supplier'] || ''); if (!gst) return;
-    const pool = openO().filter(o => cleanString(o['GSTIN of supplier'] || '') === gst).slice(0, 15);
+    const pool = (oIdx2.get(gst) || []).filter(o => o['Remarks'] === 'Not in GSTR 2B').slice(0, 15);
     if (pool.length < 2) return;
     const target = taxOf(g);
     let found: any[] | null = null;

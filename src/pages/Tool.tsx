@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import XLSX from 'xlsx-js-style';
-import { scanTally, processTally, scanGSTR2B, parseGSTR2B, parseGSTR2BWithStats, sheetRowCounts, parseCombined, parsePurchaseRegister, parseTally4, reParseCombined, reParsePR, reParseTally4, classifyGSTR2BSheets, parseGSTR2BNotes } from '@/lib/gst-parsers';
+import { scanTally, processTally, scanGSTR2B, parseGSTR2B, parseGSTR2BWithStats, sheetRowCounts, parseCombined, parsePurchaseRegister, parseTally4, reParseCombined, reParsePR, reParseTally4, classifyGSTR2BSheets, parseGSTR2BNotes, mergeGSTR2BAmendments } from '@/lib/gst-parsers';
 import { reconcile, diagnoseMismatches, reconcilePRTally, reconcileNotes, diagnoseNotes, buildNetITCSummary, buildRowAudit, buildGSTR3BSummary, repairBlankGSTIN } from '@/lib/gst-reconcile';
 import { downloadFile1, downloadFile2, downloadFile3, downloadPRTallyAudit } from '@/lib/gst-downloads';
 import { TALLY_SINGLE_ROWS, TALLY_MULTI_ROWS, TALLY_NOTE_ROW, GSTR_STD_COLS } from '@/lib/gst-helpers';
@@ -71,6 +71,7 @@ const Tool = () => {
   const [noteDiag, setNoteDiag] = useState<any>(null);
   const [netITC, setNetITC] = useState<any>(null);
   const [gstr3b, setGstr3b] = useState<any[]>([]);
+  const [amendSummary, setAmendSummary] = useState<any>(null);
   const [rowAudit, setRowAudit] = useState<any[] | null>(null);
   const [showAudit, setShowAudit] = useState(false);
 
@@ -296,7 +297,13 @@ const Tool = () => {
         // Use the user-edited mapping
         const editedScan = { ...gstrScan, detected: gstrDetected };
         const gstrStats = parseGSTR2BWithStats(editedScan);
-        const gstrRows = gstrStats.rows;
+        let gstrRows = gstrStats.rows;
+        const b2baSheet = (sheetMap?.amendmentSheets || []).find((n: string) => !/cdnr/i.test(n));
+        let amendInfo: any = null;
+        if (b2baSheet && gstrWB) {
+          try { amendInfo = mergeGSTR2BAmendments(gstrWB, b2baSheet, gstrRows); gstrRows = amendInfo.rows; } catch { amendInfo = null; }
+        }
+        setAmendSummary(amendInfo && !amendInfo.skipped ? { sheet: b2baSheet, amended: amendInfo.amended.length, superseded: amendInfo.superseded.length } : null);
         setProgressLabel('Reconciling...');
         setProgress(70);
         repairBlankGSTIN(gstrRows, invoiceRows);
@@ -612,7 +619,7 @@ const Tool = () => {
                       ? <span className="px-2 py-0.5 rounded-full bg-accent/20 text-accent font-semibold">Notes sheet: {sheetMap?.cdnrSheet || cdnrName || 'uploaded file'}</span>
                       : <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-semibold">No debit/credit note sheet found</span>}
                     {(sheetMap?.amendmentSheets || []).map((s: string) => (
-                      <span key={s} className="px-2 py-0.5 rounded-full bg-warning/20 text-warning font-semibold">Amendment sheet ignored: {s}</span>
+                      <span key={s} className={`px-2 py-0.5 rounded-full font-semibold ${/cdnr/i.test(s) ? 'bg-warning/20 text-warning' : 'bg-success/15 text-success'}`}>{/cdnr/i.test(s) ? `Note amendments not read yet: ${s}` : `Amendments included: ${s}`}</span>
                     ))}
                   </div>
                   {gstrScan.headerFallback && (

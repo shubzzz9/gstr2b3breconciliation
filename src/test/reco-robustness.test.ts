@@ -58,8 +58,8 @@ describe('note matching', () => {
     expect(remarks(out)).toEqual(['Possible Match — matched by amount, verify note number', 'Possible Match — matched by amount, verify note number']);
   });
   it('respects the 60-day window', () => {
-    const cd = [g2b(G, 'L', 'CN-1', -1000, -90, '01/01/2026', 'credit_note')];
-    const ours = [book(G, 'L', 'DN-1', -1000, -90, '30/03/2026', 'debit_note')];
+    const cd = [g2b(G, 'L', 'XQ/778', -1000, -90, '01/01/2026', 'credit_note')];
+    const ours = [book(G, 'L', 'SCF/JSP/2', -1000, -90, '30/03/2026', 'debit_note')];
     expect(remarks(reconcileNotes(cd, ours))).toContain('Not in our data');
   });
   it('groups several debit notes into one credit note', () => {

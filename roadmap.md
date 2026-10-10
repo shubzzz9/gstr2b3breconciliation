@@ -10,5 +10,6 @@
 - [ ] P5: Claimable ITC total — ON HOLD
 - [x] P5: Sec 16(4) warning + portal ITC Availability
 - [x] P5: GSTIN typo wording uses name similarity
-- [ ] B2BA amendments sheet
+- [x] B2BA amendments sheet
+- [ ] B2B-CDNRA note amendments
 - [ ] Column totals on mapping screen

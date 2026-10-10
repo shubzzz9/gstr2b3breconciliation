@@ -948,6 +948,12 @@ const Tool = () => {
                     className="text-sm font-bold text-primary flex items-center gap-2">
                     🧮 Row Coverage — where every input row went <span className="text-xs font-normal text-muted-foreground">({showAudit ? 'hide' : 'show'})</span>
                   </button>
+                  {amendSummary && (
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      Amendments ({amendSummary.sheet}): {amendSummary.amended} revised invoice(s) included
+                      {amendSummary.superseded ? `, ${amendSummary.superseded} original B2B row(s) replaced` : ''} — see "Invoice type" column for the original invoice link.
+                    </div>
+                  )}
                   {showAudit && (
                     <div className="mt-2 relative w-full overflow-auto border border-border rounded max-h-[340px]">
                       <table className="w-full border-collapse text-[11px]">
